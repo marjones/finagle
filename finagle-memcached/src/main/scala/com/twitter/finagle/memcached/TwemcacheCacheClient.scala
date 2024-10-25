@@ -6,7 +6,8 @@ import com.twitter.finagle.memcached.protocol.Stored
 import com.twitter.finagle.memcached.protocol.Exists
 import com.twitter.finagle.Service
 import com.twitter.io.Buf
-import com.twitter.util.{Future, Time}
+import com.twitter.util.Future
+import com.twitter.util.Time
 
 // Client interface supporting twemcache commands
 trait TwemcacheClient extends Client {
@@ -118,39 +119,5 @@ object TwemcacheClient {
         }
       }
     }
-  }
-}
-
-/**
- * Twemcache commands implementation for a partitioned client.
- * This trait can only be mixed into a PartitionedClient that is delegating twemcache compatible clients.
- */
-trait TwemcachePartitionedClient extends TwemcacheClient { self: PartitionedClient =>
-
-  // For now we require the PartitionedClient must be delegating TwemcacheClient.
-  protected[memcached] def twemcacheClientOf(key: String): TwemcacheClient =
-    clientOf(key).asInstanceOf[TwemcacheClient]
-
-  def getvResult(keys: Iterable[String]): Future[GetsResult] = {
-    if (keys.nonEmpty) {
-      withKeysGroupedByClient(keys) {
-        _.getvResult(_)
-      }.map { GetResult.merged }
-    } else {
-      Future.value(GetsResult(GetResult()))
-    }
-  }
-
-  def upsert(key: String, flags: Int, expiry: Time, value: Buf, version: Buf): Future[JBoolean] =
-    twemcacheClientOf(key).upsert(key, flags, expiry, value, version)
-
-  private[this] def withKeysGroupedByClient[A](
-    keys: Iterable[String]
-  )(
-    f: (TwemcacheClient, Iterable[String]) => Future[A]
-  ): Future[Seq[A]] = {
-    Future.collect(
-      keys.groupBy(twemcacheClientOf).iterator.map(Function.tupled(f)).toSeq
-    )
   }
 }
