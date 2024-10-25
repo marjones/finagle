@@ -22,6 +22,8 @@ New Features
 ~~~~~~~~~~
 
 * finagle-mysql: Added support for LONG_BLOB data type. ``PHAB_ID=D1152247``
+* finagle-mux: Added a stat, <server_label>/mux/request_context_bytes, that shows the size of the received
+  context per request.
 
 
 Bug Fixes
@@ -39,6 +41,7 @@ Breaking API Changes
   `TrackWorkerPoolExcutionDelay`, `c.t.f.netty4.param.TrackWorkerPoolExecutionDelay` has been renamed
   to `TrackWorkerPool`. These changes reflect the tracker's new functionality of collecting metrics
   and data other than the execution delay (see Runtime Behaviour Changes). ``PHAB_ID=D1176906``
+  
 
 24.5.0
 ------

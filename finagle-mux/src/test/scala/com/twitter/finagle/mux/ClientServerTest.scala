@@ -11,6 +11,7 @@ import com.twitter.finagle.mux.pushsession.FragmentingMessageWriter
 import com.twitter.finagle.mux.pushsession.MuxClientSession
 import com.twitter.finagle.mux.pushsession.MuxServerSession
 import com.twitter.finagle.mux.transport.Message
+import com.twitter.finagle.stats.InMemoryStatsReceiver
 import com.twitter.finagle.stats.NullStatsReceiver
 import com.twitter.finagle.tracing._
 import com.twitter.io.Buf
@@ -64,6 +65,8 @@ private[mux] abstract class ClientServerTest
 
     val pingSends = new AtomicInteger(0)
     val pingReceives = new AtomicInteger(0)
+
+    val serverStatsReceiver = new InMemoryStatsReceiver
 
     { // launch the read loops for each queue
       def loop(source: AsyncQueue[Buf], dest: QueueChannelHandle[ByteReader, _]): Unit = {
@@ -122,7 +125,7 @@ private[mux] abstract class ClientServerTest
 
     val server: Closable = {
       val session = new MuxServerSession(
-        params = Mux.server.params,
+        params = Mux.server.withStatsReceiver(serverStatsReceiver).params,
         h_decoder = new FragmentDecoder(NullStatsReceiver),
         h_messageWriter =
           new FragmentingMessageWriter(serverHandle, Int.MaxValue, NullStatsReceiver),
@@ -415,4 +418,24 @@ class ClientServerTestDispatch extends ClientServerTest {
     assert(response.contexts.nonEmpty)
     assert(response.contexts == ctxts)
   }
+
+  test("Record stat for received request context size")(new Ctx {
+    val request = Request.empty
+
+    when(service(request)).thenAnswer(
+      new Answer[Future[Response]] {
+        def answer(invocation: InvocationOnMock) = {
+          Future.value(Response(request.contexts, Buf.Empty))
+        }
+      }
+    )
+
+    await(Contexts.broadcast.let(testContext, Buf.Utf8("My context!")) {
+      client(Request.empty)
+    })
+
+    assert(
+      serverStatsReceiver.stats(Seq("request_context_bytes")) == Seq(
+        "com.twitter.finagle.mux.MuxContext".length + "My context!".length))
+  })
 }

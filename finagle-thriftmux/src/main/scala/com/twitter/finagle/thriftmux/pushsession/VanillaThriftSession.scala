@@ -1,17 +1,31 @@
 package com.twitter.finagle.thriftmux.pushsession
 
-import com.twitter.finagle.context.{Contexts, RemoteInfo}
-import com.twitter.finagle.{Dtab, Path, Service, Stack, Status, Thrift, mux, param}
-import com.twitter.finagle.pushsession.{PushChannelHandle, PushSession}
+import com.twitter.finagle.context.Contexts
+import com.twitter.finagle.context.RemoteInfo
+import com.twitter.finagle.Dtab
+import com.twitter.finagle.Path
+import com.twitter.finagle.Service
+import com.twitter.finagle.Stack
+import com.twitter.finagle.Status
+import com.twitter.finagle.Thrift
+import com.twitter.finagle.mux
+import com.twitter.finagle.param
+import com.twitter.finagle.pushsession.PushChannelHandle
+import com.twitter.finagle.pushsession.PushSession
 import com.twitter.finagle.mux.transport.Message
-import com.twitter.finagle.mux.{ClientDiscardedRequestException, ServerProcessor}
+import com.twitter.finagle.mux.ClientDiscardedRequestException
+import com.twitter.finagle.mux.ServerProcessor
 import com.twitter.finagle.stats.Verbosity
 import com.twitter.finagle.thrift.thrift.RequestHeader
-import com.twitter.finagle.thrift.{ClientId, InputBuffer, RichRequestHeader}
+import com.twitter.finagle.thrift.ClientId
+import com.twitter.finagle.thrift.InputBuffer
+import com.twitter.finagle.thrift.RichRequestHeader
 import com.twitter.finagle.tracing.Trace
 import com.twitter.finagle.transport.Transport
-import com.twitter.io.{Buf, ByteReader}
-import com.twitter.logging.{Level, Logger}
+import com.twitter.io.Buf
+import com.twitter.io.ByteReader
+import com.twitter.logging.Level
+import com.twitter.logging.Logger
 import com.twitter.util._
 import java.util
 import org.apache.thrift.protocol.TProtocolFactory
@@ -53,6 +67,8 @@ private final class VanillaThriftSession(
   private[this] val pendingGauge = params[param.Stats].statsReceiver
     .addGauge(Verbosity.Debug, "pending") { pending.size }
 
+  private[this] val serverProcessor = new ServerProcessor(params[param.Stats].statsReceiver)
+
   private[this] val respond: Try[Message] => Unit = {
     // Since it's stateless we can reuse the Runnable!
     val runnable = new Runnable { def run = handleResponseComplete() }
@@ -89,7 +105,7 @@ private final class VanillaThriftSession(
     if (state != Closed) {
       val f = Local.let(locals) {
         val dispatch = thriftToMux(isTTwitter, tProtocolFactory, reader.readAll())
-        ServerProcessor(dispatch, service)
+        serverProcessor(dispatch, service)
       }
 
       pending.offer(f)

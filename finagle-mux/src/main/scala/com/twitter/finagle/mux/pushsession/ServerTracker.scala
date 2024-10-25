@@ -51,6 +51,8 @@ private class ServerTracker(
   private[this] var h_leaseExpiration: Time = Time.Top
   private[this] var h_cachedLocals: Option[Local.Context] = None
 
+  private[this] val serverProcessor = new ServerProcessor(statsReceiver)
+
   /** `Lessee` used for issuing lease duration. */
   val lessee: Lessee = new Lessee {
     def issue(howLong: Duration): Unit = {
@@ -175,7 +177,7 @@ private class ServerTracker(
     else
       Local.let(handleGetLocals()) {
         lessor.observeArrival()
-        val responseF = ServerProcessor(m, service)
+        val responseF = serverProcessor(m, service)
         val elapsed = Stopwatch.start()
         val dispatch = Dispatch(m.tag, responseF, elapsed)
         h_dispatches.put(m.tag, dispatch)

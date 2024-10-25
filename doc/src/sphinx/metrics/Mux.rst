@@ -21,6 +21,9 @@
   not have a corresponding request.  This happens when a server has already
   responded to the request when it receives a Tdiscard.
 
+**<server_label>/mux/request_context_bytes**
+  A stat of the size of the received context per request.
+
 **clienthangup**
   A counter of the number of times sessions have been abruptly terminated by
   the client.
