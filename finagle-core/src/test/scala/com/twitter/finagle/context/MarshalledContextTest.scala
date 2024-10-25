@@ -62,6 +62,55 @@ class MarshalledContextTest extends AbstractContextTest {
     }
   }
 
+  test("retainIds") {
+    val ctx = new MarshalledContext
+
+    def stringKey(id: String): ctx.Key[String] = new ctx.Key[String](id) {
+      def marshal(value: String): Buf = Buf.Utf8(value)
+      def tryUnmarshal(buf: Buf): Return[String] = buf match {
+        case Buf.Utf8(value) => Return(value)
+      }
+    }
+
+    val fooKey = stringKey("foo")
+    val barKey = stringKey("bar")
+    val bazKey = stringKey("baz")
+
+    ctx.let(
+      Seq(
+        ctx.KeyValuePair(fooKey, "foo-value"),
+        ctx.KeyValuePair(barKey, "bar-value"),
+        ctx.KeyValuePair(bazKey, "baz-value"))) {
+
+      assert(
+        ctx.marshal() == Map(
+          fooKey.marshalId -> Buf.Utf8("foo-value"),
+          barKey.marshalId -> Buf.Utf8("bar-value"),
+          bazKey.marshalId -> Buf.Utf8("baz-value"),
+        ))
+
+      ctx.retainIds(Set("foo", "baz")) {
+        assert(
+          ctx.marshal() == Map(
+            fooKey.marshalId -> Buf.Utf8("foo-value"),
+            bazKey.marshalId -> Buf.Utf8("baz-value")
+          ))
+
+        ctx.retainIds(Set("foo")) {
+          assert(
+            ctx.marshal() == Map(
+              fooKey.marshalId -> Buf.Utf8("foo-value")
+            ))
+
+          // qux doesn't exist
+          ctx.retainIds(Set("qux")) {
+            assert(ctx.marshal().isEmpty)
+          }
+        }
+      }
+    }
+  }
+
   test("key lookups are case insensitive") {
     val ctx = new MarshalledContext
     val lowerKey = new ctx.Key[String]("foo") {

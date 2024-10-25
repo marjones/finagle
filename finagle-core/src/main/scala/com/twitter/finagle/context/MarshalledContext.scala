@@ -127,6 +127,11 @@ final class MarshalledContext private[context] extends Context {
     letLocal(next)(fn)
   }
 
+  private[finagle] def retainIds[R](ids: Set[String])(fn: => R): R = {
+    val next = env.filter { case (id, _) => ids.contains(id) }
+    letLocal(next)(fn)
+  }
+
   def letClearAll[R](fn: => R): R = local.letClear(fn)
 
   /**
