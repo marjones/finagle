@@ -82,7 +82,7 @@ final class MarshalledContext private[context] extends Context {
     /**
      * The identifier used to lookup the key in the stored context.
      */
-    private[finagle] final val lookupId: String = normalizeId(id)
+    private[twitter] final val lookupId: String = normalizeId(id)
 
     /**
      * Marshal an A-typed value into a Buf.
@@ -127,7 +127,7 @@ final class MarshalledContext private[context] extends Context {
     letLocal(next)(fn)
   }
 
-  private[finagle] def retainIds[R](ids: Set[String])(fn: => R): R = {
+  private[twitter] def retainIds[R](ids: Set[String])(fn: => R): R = {
     val next = env.filter { case (id, _) => ids.contains(id) }
     letLocal(next)(fn)
   }
