@@ -36,7 +36,7 @@ object ClientId {
   // As a matter of legacy, we need to support the notion of
   // an empty client id. Old version of contexts could serialize
   // the absence of a client id with an empty buffer.
-  private[finagle] val clientIdCtx =
+  private[twitter] val clientIdCtx =
     new Contexts.broadcast.Key[Option[ClientId]]("com.twitter.finagle.thrift.ClientIdContext") {
       def marshal(clientId: Option[ClientId]): Buf = clientId match {
         case None => Buf.Empty

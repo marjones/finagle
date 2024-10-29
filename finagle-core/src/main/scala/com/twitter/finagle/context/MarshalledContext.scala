@@ -82,7 +82,7 @@ final class MarshalledContext private[context] extends Context {
     /**
      * The identifier used to lookup the key in the stored context.
      */
-    private[context] final val lookupId: String = normalizeId(id)
+    private[finagle] final val lookupId: String = normalizeId(id)
 
     /**
      * Marshal an A-typed value into a Buf.

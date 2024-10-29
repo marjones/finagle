@@ -1,6 +1,8 @@
 package com.twitter.finagle.context
 import com.twitter.io.Buf
-import com.twitter.util.{Return, Throw, Try}
+import com.twitter.util.Return
+import com.twitter.util.Throw
+import com.twitter.util.Try
 
 private[finagle] final class BackupRequest private ()
 
@@ -34,7 +36,7 @@ object BackupRequest {
     }
   }
 
-  private[finagle] val Ctx: Contexts.broadcast.Key[BackupRequest] = new Context
+  private[twitter] val Ctx: Contexts.broadcast.Key[BackupRequest] = new Context
 
   /**
    * Whether or not a request was initiated as a backup request.
