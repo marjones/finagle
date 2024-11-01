@@ -21,7 +21,7 @@ import java.net.InetSocketAddress
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
 
-class MemcachedCompressingClientTest extends AnyFunSuite with BeforeAndAfter {
+class ClientCompressionTest extends AnyFunSuite with BeforeAndAfter {
 
   val clientName = "test_client"
   val Timeout: Duration = 15.seconds

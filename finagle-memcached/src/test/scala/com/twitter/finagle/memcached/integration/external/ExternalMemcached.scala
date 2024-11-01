@@ -8,53 +8,51 @@ import java.net.BindException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
-import scala.jdk.CollectionConverters
 import scala.collection._
-import scala.collection.immutable.Stream
-import scala.util.control.NonFatal
 
-object TestMemcachedServer {
-  def start(): Option[TestMemcachedServer] = start(None)
+object MemcachedServer {
 
-  def start(address: Option[InetSocketAddress]): Option[TestMemcachedServer] = {
-    Option(System.getProperty("EXTERNAL_MEMCACHED_PATH")) match {
-      case Some(externalMemcachedPath) =>
-        ExternalMemcached.start(address, externalMemcachedPath)
-      case None =>
-        InternalMemcached.start(address)
+  def start(): MemcachedServer = {
+    if (ExternalMemcached.use()) {
+      ExternalMemcached.start()
+    } else {
+      InternalMemcached.start()
     }
   }
 }
 
-trait TestMemcachedServer {
+trait MemcachedServer {
   val address: InetSocketAddress
   def stop(): Unit
 }
 
 private[memcached] object InternalMemcached {
-  def start(address: Option[InetSocketAddress]): Option[TestMemcachedServer] = {
-    try {
-      val server = new InProcessMemcached(
-        address.getOrElse(new InetSocketAddress(InetAddress.getLoopbackAddress, 0))
-      )
-      Some(new TestMemcachedServer {
-        val address = server.start().boundAddress.asInstanceOf[InetSocketAddress]
-        def stop(): Unit = { server.stop(true) }
-      })
-    } catch {
-      case NonFatal(_) => None
+  def start(): MemcachedServer = {
+    val server = new InProcessMemcached(
+      new InetSocketAddress(InetAddress.getLoopbackAddress, 0)
+    )
+    new MemcachedServer {
+      val address = server.start().boundAddress.asInstanceOf[InetSocketAddress]
+      def stop(): Unit = { server.stop(true) }
     }
   }
 }
 
-private[memcached] object ExternalMemcached { self =>
-  class MemcachedBinaryNotFound extends Exception
+private[memcached] object ExternalMemcached {
   private[this] var processes: List[Process] = List()
   private[this] val forbiddenPorts = 11000.until(11900)
   private[this] var takenPorts: Set[Int] = Set[Int]()
   // prevent us from taking a port that is anything close to a real memcached port.
 
-  private[this] def findAddress() = {
+  def use(): Boolean = {
+    externalMemcachedPath().nonEmpty
+  }
+
+  private[this] def externalMemcachedPath(): Option[String] = {
+    Option(System.getProperty("EXTERNAL_MEMCACHED_PATH"))
+  }
+
+  private[this] def findAddress(): InetSocketAddress = {
     var address: Option[InetSocketAddress] = None
     var tries = 100
     while (address == None && tries >= 0) {
@@ -66,45 +64,35 @@ private[memcached] object ExternalMemcached { self =>
         Thread.sleep(5)
       }
     }
-    if (address == None) sys.error("Couldn't get an address for the external memcached")
+    if (address == None) throw new Exception("Couldn't get an address for the external memcached")
 
-    takenPorts += address
-      .getOrElse(
-        new InetSocketAddress(InetAddress.getLoopbackAddress, 0)
-      )
-      .getPort
-    address
+    takenPorts += address.get.getPort
+    address.get
   }
 
-  def start(
-    address: Option[InetSocketAddress],
-    externalMemcachedPath: String
-  ): Option[TestMemcachedServer] = {
+  def start(): MemcachedServer = {
     def exec(address: InetSocketAddress): Process = {
       val cmd =
-        List(externalMemcachedPath, "-l", address.getHostName, "-p", address.getPort.toString)
+        List(externalMemcachedPath().get, "-l", address.getHostName, "-p", address.getPort.toString)
       val builder = new ProcessBuilder(cmd: _*)
       builder.start()
     }
 
-    (address orElse findAddress()) flatMap { addr =>
-      try {
-        val proc = exec(addr)
-        processes :+= proc
+    val addr = findAddress()
+    val proc = exec(addr)
+    processes :+= proc
 
-        if (waitForPort(addr.getPort))
-          Some(new TestMemcachedServer {
-            val address = addr
-            def stop(): Unit = {
-              proc.destroy()
-              proc.waitFor()
-            }
-          })
-        else
-          None
-      } catch {
-        case _: Throwable => None
+    if (waitForPort(addr.getPort)) {
+      new MemcachedServer {
+        val address = addr
+
+        def stop(): Unit = {
+          proc.destroy()
+          proc.waitFor()
+        }
       }
+    } else {
+      throw new Exception("Timed out waiting for external memcached to start")
     }
   }
 

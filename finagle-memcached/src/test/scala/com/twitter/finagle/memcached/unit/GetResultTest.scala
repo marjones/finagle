@@ -50,21 +50,15 @@ class GetResultTest extends AnyFunSuite with MockitoSugar {
   }
 
   test("merged of empty seq produces empty GetResult") {
-    val context = new Context
-
     assert(GetResult.merged(Seq[GetResult]()) == GetResult())
   }
 
   test("merged of single item produces that item") {
-    val context = new Context
-
     val getResult = GetResult()
     assert(GetResult.merged(Seq(getResult)) == getResult)
   }
 
   test("merge is the same as ++") {
-    val context = new Context
-
     val subResults = (1 to 10) map { i =>
       GetResult(
         hits = Map("h" + i -> mock[Value]),

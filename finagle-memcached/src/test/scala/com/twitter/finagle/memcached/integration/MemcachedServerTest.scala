@@ -10,8 +10,9 @@ import com.twitter.finagle.client.StackClient
 import com.twitter.finagle.client.StdStackClient
 import com.twitter.finagle.client.Transporter
 import com.twitter.finagle.dispatch.SerialClientDispatcher
+import com.twitter.finagle.memcached.integration.external.ExternalMemcached
 import com.twitter.finagle.memcached.integration.external.InternalMemcached
-import com.twitter.finagle.memcached.integration.external.TestMemcachedServer
+import com.twitter.finagle.memcached.integration.external.MemcachedServer
 import com.twitter.finagle.memcached.protocol.Add
 import com.twitter.finagle.memcached.protocol.Cas
 import com.twitter.finagle.memcached.protocol.Command
@@ -41,15 +42,15 @@ import org.scalatest.funsuite.AnyFunSuite
 // Memcached protocol.
 private class MemcachedServerTest extends AnyFunSuite with BeforeAndAfter {
 
-  private[this] var realServer: TestMemcachedServer = _
-  private[this] var testServer: TestMemcachedServer = _
+  private[this] var realServer: MemcachedServer = _
+  private[this] var testServer: MemcachedServer = _
 
   private[this] var realServerClient: Service[Command, String] = _
   private[this] var testServerClient: Service[Command, String] = _
 
   before {
-    realServer = TestMemcachedServer.start().get
-    testServer = InternalMemcached.start(None).get
+    realServer = MemcachedServer.start()
+    testServer = InternalMemcached.start()
 
     realServerClient = StringClient
       .apply().newService(Name.bound(Address(realServer.address)), "client")
@@ -65,7 +66,7 @@ private class MemcachedServerTest extends AnyFunSuite with BeforeAndAfter {
     Await.result(testServerClient.close(), 5.seconds)
   }
 
-  if (Option(System.getProperty("EXTERNAL_MEMCACHED_PATH")).isDefined) {
+  if (ExternalMemcached.use()) {
     test("NOT_FOUND") {
       assertSameResponses(Incr(Buf.Utf8("key1"), 1), "NOT_FOUND\r\n")
     }

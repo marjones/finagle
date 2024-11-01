@@ -2,7 +2,6 @@ package com.twitter.finagle.memcached.integration;
 
 import scala.Option;
 
-import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -13,8 +12,8 @@ import com.twitter.finagle.Names;
 import com.twitter.finagle.Service;
 import com.twitter.finagle.memcached.JavaClient;
 import com.twitter.finagle.memcached.JavaClientBase;
-import com.twitter.finagle.memcached.integration.external.TestMemcachedServer;
-import com.twitter.finagle.memcached.integration.external.TestMemcachedServer$;
+import com.twitter.finagle.memcached.integration.external.MemcachedServer;
+import com.twitter.finagle.memcached.integration.external.MemcachedServer$;
 import com.twitter.finagle.memcached.protocol.Command;
 import com.twitter.finagle.memcached.protocol.Response;
 import com.twitter.io.Bufs;
@@ -23,12 +22,11 @@ import com.twitter.util.Await;
 import static org.junit.Assert.assertEquals;
 
 public class TestClient {
-  private Option<TestMemcachedServer> server;
+  private MemcachedServer server;
 
   @Before
   public void setUp() {
-    server = TestMemcachedServer$.MODULE$.start();
-    Assume.assumeTrue(server.isDefined());
+    server = MemcachedServer$.MODULE$.start();
   }
 
   /**
@@ -36,7 +34,7 @@ public class TestClient {
    */
   @Test
   public void testGetAndSet() throws Exception {
-    Address addr = Addresses.newInetAddress(server.get().address());
+    Address addr = Addresses.newInetAddress(server.address());
 
     Service<Command, Response> service = Memcached.client()
           .connectionsPerEndpoint(1)

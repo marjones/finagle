@@ -1,23 +1,31 @@
-package com.twitter.finagle.memcached.unit.util
+package com.twitter.finagle.memcached.unit
 
 import com.twitter.conversions.DurationOps._
 import com.twitter.finagle._
 import com.twitter.finagle.client.Transporter
 import com.twitter.finagle.factory.TimeoutFactory
 import com.twitter.finagle.filter.NackAdmissionFilter
-import com.twitter.finagle.liveness.{FailureAccrualFactory, FailureAccrualPolicy}
-import com.twitter.finagle.memcached.{Client, TwemcacheClient}
-import com.twitter.finagle.pool.BalancingPool
+import com.twitter.finagle.liveness.FailureAccrualFactory
+import com.twitter.finagle.liveness.FailureAccrualPolicy
+import com.twitter.finagle.memcached.Client
+import com.twitter.finagle.memcached.TwemcacheClient
 import com.twitter.finagle.param.Stats
 import com.twitter.finagle.partitioning.{param => pparam}
+import com.twitter.finagle.pool.BalancingPool
 import com.twitter.finagle.service._
 import com.twitter.finagle.stats.InMemoryStatsReceiver
-import com.twitter.util.{Await, Time}
-import org.scalatest.concurrent.{Eventually, IntegrationPatience}
-import org.scalatestplus.mockito.MockitoSugar
+import com.twitter.util.Await
+import com.twitter.util.Time
+import org.scalatest.concurrent.Eventually
+import org.scalatest.concurrent.IntegrationPatience
 import org.scalatest.funsuite.AnyFunSuite
+import org.scalatestplus.mockito.MockitoSugar
 
-class MemcachedTest extends AnyFunSuite with MockitoSugar with Eventually with IntegrationPatience {
+class ClientConfigurationTest
+    extends AnyFunSuite
+    with MockitoSugar
+    with Eventually
+    with IntegrationPatience {
 
   protected def baseClient: Memcached.Client = Memcached.client
 

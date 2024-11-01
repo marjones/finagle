@@ -3,7 +3,8 @@ package com.twitter.finagle.memcached.integration
 import com.twitter.conversions.DurationOps._
 import com.twitter.finagle._
 import com.twitter.finagle.memcached.Client
-import com.twitter.finagle.memcached.integration.external.TestMemcachedServer
+import com.twitter.finagle.memcached.integration.external.ExternalMemcached
+import com.twitter.finagle.memcached.integration.external.MemcachedServer
 import com.twitter.finagle.memcached.protocol.Command
 import com.twitter.finagle.memcached.protocol.Response
 import com.twitter.io.Buf
@@ -23,59 +24,45 @@ class ProxyTest extends AnyFunSuite with BeforeAndAfter {
 
   type MemcacheService = Service[Command, Response]
 
-  /**
-   * Note: This integration test requires a real Memcached server to run.
-   */
   var externalClient: Client = null
   var server: ListeningServer = null
   var serverAddress: InetSocketAddress = null
   var proxyService: MemcacheService = null
   var proxyClient: MemcacheService = null
-  var testServer: Option[TestMemcachedServer] = None
+  var testServer: MemcachedServer = null
 
   before {
-    testServer = TestMemcachedServer.start()
-    if (testServer.isDefined) {
-      Thread.sleep(150) // On my box the 100ms sleep wasn't long enough
-      proxyClient = Memcached.client
-        .connectionsPerEndpoint(1)
-        .newService(
-          Name.bound(Address(testServer.get.address.asInstanceOf[InetSocketAddress])),
-          "memcached"
-        )
-
-      proxyService = new MemcacheService {
-        def apply(request: Command) = proxyClient(request)
-      }
-
-      server = Memcached.server
-        .withLabel("memcached")
-        .serve(new InetSocketAddress(InetAddress.getLoopbackAddress, 0), proxyService)
-
-      serverAddress = server.boundAddress.asInstanceOf[InetSocketAddress]
-      externalClient = Client(
-        Memcached.client
-          .newService("%s:%d".format(serverAddress.getHostName, serverAddress.getPort))
+    testServer = MemcachedServer.start()
+    Thread.sleep(150) // On my box the 100ms sleep wasn't long enough
+    proxyClient = Memcached.client
+      .connectionsPerEndpoint(1)
+      .newService(
+        Name.bound(com.twitter.finagle.Address(testServer.address)),
+        "memcached"
       )
+
+    proxyService = new MemcacheService {
+      def apply(request: Command) = proxyClient(request)
     }
+
+    server = Memcached.server
+      .withLabel("memcached")
+      .serve(new InetSocketAddress(InetAddress.getLoopbackAddress, 0), proxyService)
+
+    serverAddress = server.boundAddress.asInstanceOf[InetSocketAddress]
+    externalClient = Client(
+      Memcached.client
+        .newService("%s:%d".format(serverAddress.getHostName, serverAddress.getPort))
+    )
   }
 
   after {
     // externalClient.close() needs to be called explicitly by each test. Otherwise
     // 'quit' test would call it twice.
-    if (testServer.isDefined) {
-      server.close(0.seconds)
-      proxyService.close()
-      proxyClient.close()
-      testServer.map(_.stop())
-    }
-  }
-
-  override def withFixture(test: NoArgTest) = {
-    if (testServer == None) {
-      info("Cannot start memcached. skipping test...")
-      cancel()
-    } else test()
+    server.close(0.seconds)
+    proxyService.close()
+    proxyClient.close()
+    testServer.stop()
   }
 
   test("Proxied Memcached Servers should handle a basic get/set operation") {
@@ -89,7 +76,15 @@ class ProxyTest extends AnyFunSuite with BeforeAndAfter {
     awaitResult(externalClient.close())
   }
 
-  if (Option(System.getProperty("EXTERNAL_MEMCACHED_PATH")).isDefined) {
+  test("quit is supported") {
+    awaitResult(externalClient.get("foo")) // do nothing
+    awaitResult(externalClient.quit())
+    intercept[ServiceClosedException] {
+      awaitResult(externalClient.get("foo"))
+    }
+  }
+
+  if (ExternalMemcached.use()) {
     test("stats is supported") {
       awaitResult(externalClient.delete("foo"))
       assert(awaitResult(externalClient.get("foo")) == None)
@@ -102,9 +97,7 @@ class ProxyTest extends AnyFunSuite with BeforeAndAfter {
       }
       awaitResult(externalClient.close())
     }
-  }
 
-  if (Option(System.getProperty("EXTERNAL_MEMCACHED_PATH")).isDefined) {
     test("stats (cachedump) is supported") {
       awaitResult(externalClient.delete("foo"))
       assert(awaitResult(externalClient.get("foo")) == None)
@@ -125,13 +118,4 @@ class ProxyTest extends AnyFunSuite with BeforeAndAfter {
       awaitResult(externalClient.close())
     }
   }
-
-  test("quit is supported") {
-    awaitResult(externalClient.get("foo")) // do nothing
-    awaitResult(externalClient.quit())
-    intercept[ServiceClosedException] {
-      awaitResult(externalClient.get("foo"))
-    }
-  }
-
 }

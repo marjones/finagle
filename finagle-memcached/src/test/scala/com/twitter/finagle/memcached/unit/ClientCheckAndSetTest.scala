@@ -13,7 +13,7 @@ import org.mockito.Mockito._
 import org.scalatestplus.mockito.MockitoSugar
 import org.scalatest.funsuite.AnyFunSuite
 
-class ConnectedClientTest extends AnyFunSuite with MockitoSugar {
+class ClientCheckAndSetTest extends AnyFunSuite with MockitoSugar {
 
   val TimeOut = 15.seconds
 
@@ -25,26 +25,18 @@ class ConnectedClientTest extends AnyFunSuite with MockitoSugar {
   val key = "key"
   val value = Buf.Utf8("value")
 
-  test("cas correctly responds to return states of the service") {
-    when(service.apply(any[Command])).thenReturn(Future.value(Stored))
-    assert(awaitResult(client.checkAndSet(key, value, casUnique).map(_.replaced)))
-
-    when(service.apply(any[Command])).thenReturn(Future.value(Exists))
-    assert(!awaitResult(client.checkAndSet(key, value, casUnique).map(_.replaced)))
-
-    when(service.apply(any[Command])).thenReturn(Future.value(NotFound))
-    assert(!awaitResult(client.checkAndSet(key, value, casUnique).map(_.replaced)))
-  }
-
   test("checkAndSet correctly responds to return states of the service") {
     when(service.apply(any[Command])).thenReturn(Future.value(Stored))
     assert(awaitResult(client.checkAndSet(key, value, casUnique)) == CasResult.Stored)
+    assert(awaitResult(client.checkAndSet(key, value, casUnique)).replaced)
 
     when(service.apply(any[Command])).thenReturn(Future.value(Exists))
     assert(awaitResult(client.checkAndSet(key, value, casUnique)) == CasResult.Exists)
+    assert(!awaitResult(client.checkAndSet(key, value, casUnique)).replaced)
 
     when(service.apply(any[Command])).thenReturn(Future.value(NotFound))
     assert(awaitResult(client.checkAndSet(key, value, casUnique)) == CasResult.NotFound)
+    assert(!awaitResult(client.checkAndSet(key, value, casUnique)).replaced)
   }
 
   test("checkAndSet correctly responds to the error states of the service") {
