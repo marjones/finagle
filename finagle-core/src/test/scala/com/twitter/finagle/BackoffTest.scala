@@ -147,15 +147,21 @@ class BackoffTest extends AnyFunSuite with ScalaCheckDrivenPropertyChecks {
     forAll(exponentialGen) {
       case (startMs: Long, maxMs: Long, seed: Long) =>
         val rng = Rng(seed)
-        val backoff: Backoff =
-          new ExponentialJittered(startMs.millis, maxMs.millis, 1, Rng(seed))
-        val result: ArrayBuffer[Duration] = new ArrayBuffer[Duration]()
         var start = startMs.millis
+        val max = maxMs.millis
+        val backoff: Backoff = new ExponentialJittered(start, max, 1, Rng(seed))
+        val result: ArrayBuffer[Duration] = new ArrayBuffer[Duration]()
         for (attempt <- 1 to 7) {
           result.append(start)
-          start = nextStart(start, maxMs.millis, rng, attempt)
+          start = nextStart(start, max, rng, attempt)
         }
         verifyBackoff(backoff, result.toSeq, exhausted = false)
+
+        // Verify case where Rng returns 0.
+        val zeroRng = getZeroRng(rng)
+        val zeroRngBackoff: Backoff = new ExponentialJittered(start, max, 1, zeroRng)
+        val expectedResults = Seq(start, nextStart(start, max, zeroRng, 1))
+        verifyBackoff(zeroRngBackoff, expectedResults, exhausted = false)
     }
 
     def nextStart(start: Duration, max: Duration, rng: Rng, attempt: Int): Duration = {
@@ -163,7 +169,7 @@ class BackoffTest extends AnyFunSuite with ScalaCheckDrivenPropertyChecks {
       // to avoid Long overflow
       val maxBackoff = if (start >= max / shift) max else start * shift
       if (maxBackoff == max) max
-      else Duration.fromNanoseconds(rng.nextLong(maxBackoff.inNanoseconds))
+      else Duration.fromNanoseconds(1 + rng.nextLong(maxBackoff.inNanoseconds))
     }
   }
 
@@ -330,5 +336,15 @@ class BackoffTest extends AnyFunSuite with ScalaCheckDrivenPropertyChecks {
       actualBackoff = actualBackoff.next
     }
     assert(actualBackoff.isExhausted == exhausted)
+  }
+
+  private[this] def getZeroRng(rng: Rng): Rng = new Rng {
+    override def nextDouble(): Double = rng.nextDouble()
+
+    override def nextInt(n: Int): Int = rng.nextInt(n)
+
+    override def nextInt(): Int = rng.nextInt()
+
+    override def nextLong(n: Long): Long = 0L
   }
 }

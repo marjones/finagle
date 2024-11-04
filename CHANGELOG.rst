@@ -31,6 +31,7 @@ Bug Fixes
 
 * finagle-memcached: Fixed support for running memcached tests with external memcached. Added README with
   instructions under finagle/finagle-memcached. ``PHAB_ID=D1120240``
+* finagle-core: Fixed a bug in `ExponentialJitteredBackoff` where `rng` can be 0. ``PHAB_ID=D1178528``
 
 
 Breaking API Changes

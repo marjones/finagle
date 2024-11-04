@@ -328,8 +328,9 @@ object Backoff {
       if (maxBackoff == maximum) {
         new Const(maximum)
       } else {
-        val random = Duration.fromNanoseconds(rng.nextLong(maxBackoff.inNanoseconds))
-        new ExponentialJittered(random, maximum, attempt + 1, rng)
+        // to avoid the case of random being 0
+        val random = 1 + rng.nextLong(maxBackoff.inNanoseconds)
+        new ExponentialJittered(Duration.fromNanoseconds(random), maximum, attempt + 1, rng)
       }
     }
 
