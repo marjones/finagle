@@ -116,6 +116,42 @@ class StatsFilterTest extends AnyFunSuite {
     }
   }
 
+  test("requests histogram counter stat") {
+    Time.withCurrentTimeFrozen { tc =>
+      val timer = new MockTimer
+      val sr = new InMemoryStatsReceiver()
+      val histogramCounterFactory = new HistogramCounterFactory(timer, () => Time.now.inMillis)
+      val filter =
+        new StatsFilter[String, String](
+          sr,
+          ResponseClassifier.Default,
+          StatsFilter.DefaultExceptions,
+          TimeUnit.SECONDS,
+          () => Time.now.inSeconds,
+          histogramCounterFactoryOpt = Some(histogramCounterFactory)
+        )
+      var promise = new Promise[String]
+      val svc = filter.andThen(new Service[String, String] {
+        def apply(request: String): Promise[String] = promise
+      })
+      svc("1")
+      svc("1")
+      svc("1")
+      promise.setValue("done")
+      tc.advance(100.millis)
+      timer.tick()
+
+      promise = new Promise[String]
+      svc("1")
+      svc("1")
+      promise.setValue("done")
+      tc.advance(100.millis)
+      timer.tick()
+
+      assert(sr.stats(Seq("requests", "hundredMilliSecondly")) == Seq(3, 2))
+    }
+  }
+
   test("report exceptions") {
     val (promise, receiver, statsService) = getService()
 

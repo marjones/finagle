@@ -291,3 +291,15 @@ object ExceptionStatsHandler {
     lazy val default = ExceptionStatsHandler(StatsFilter.DefaultExceptions)
   }
 }
+
+/**
+ * A class eligible for configuring a
+ * [[com.twitter.finagle.stats.HistogramCounterFactory]] throughout finagle servers
+ * and clients.
+ */
+private[twitter] case class HistogramCounterFactory(
+  histogramCounterFactoryOpt: Option[stats.HistogramCounterFactory])
+object HistogramCounterFactory {
+  implicit val param: Stack.Param[HistogramCounterFactory] =
+    Stack.Param(HistogramCounterFactory(None))
+}

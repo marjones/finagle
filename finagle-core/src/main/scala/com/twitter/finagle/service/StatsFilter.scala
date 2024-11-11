@@ -45,7 +45,7 @@ object StatsFilter {
    * Creates a [[com.twitter.finagle.Stackable]] [[com.twitter.finagle.service.StatsFilter]].
    */
   def module[Req, Rep]: Stackable[ServiceFactory[Req, Rep]] =
-    new Stack.Module7[
+    new Stack.Module8[
       param.Stats,
       param.ExceptionStatsHandler,
       param.ResponseClassifier,
@@ -53,6 +53,7 @@ object StatsFilter {
       Now,
       param.MetricBuilders,
       param.StandardStats,
+      param.HistogramCounterFactory,
       ServiceFactory[Req, Rep]
     ] {
       val role: Stack.Role = StatsFilter.role
@@ -65,6 +66,7 @@ object StatsFilter {
         now: Now,
         metrics: param.MetricBuilders,
         standardStats: param.StandardStats,
+        histogramCounterFactory: param.HistogramCounterFactory,
         next: ServiceFactory[Req, Rep]
       ): ServiceFactory[Req, Rep] = {
         val param.Stats(statsReceiver) = _stats
@@ -78,7 +80,8 @@ object StatsFilter {
             _param.unit,
             now.nowOrDefault(_param.unit),
             metrics.registry,
-            standardStats.standardStats
+            standardStats.standardStats,
+            histogramCounterFactory.histogramCounterFactoryOpt
           ).andThen(next)
         }
       }
@@ -163,6 +166,10 @@ object StatsFilter {
  *
  * @param metricsRegistry an optional [MetricBuilderRegistry] set by stack parameter
  * for injecting metrics and instrumenting top-line expressions
+ *
+ * @param histogramCounterFactoryOpt an optional [HistogramCounterFactory] that, if present, will
+ *                                   be used to record a stat for requests received over a 100ms
+ *                                   period. This can be used to see "burstiness" of requests.
  */
 class StatsFilter[Req, Rep] private[service] (
   statsReceiver: StatsReceiver,
@@ -171,7 +178,8 @@ class StatsFilter[Req, Rep] private[service] (
   timeUnit: TimeUnit,
   now: () => Long,
   metricsRegistry: Option[CoreMetricsRegistry] = None,
-  standardStats: StandardStats = Disabled)
+  standardStats: StandardStats = Disabled,
+  histogramCounterFactoryOpt: Option[HistogramCounterFactory] = None)
     extends SimpleFilter[Req, Rep] {
 
   /**
@@ -278,6 +286,15 @@ class StatsFilter[Req, Rep] private[service] (
     statsReceiver.addGauge(Descriptions.pending, "pending") {
       outstandingRequestCount.sum()
     }
+  private[this] val requestsHistogramCounterOpt = histogramCounterFactoryOpt match {
+    case Some(histogramCounterFactory) =>
+      Some(
+        histogramCounterFactory(
+          Seq("requests"),
+          StatsFrequency.HundredMilliSecondly,
+          statsReceiver))
+    case None => None
+  }
 
   private[this] def isIgnorableResponse(rep: Try[Rep]): Boolean = rep match {
     case Throw(f: FailureFlags[_]) => f.isFlagged(FailureFlags.Ignorable)
@@ -300,6 +317,12 @@ class StatsFilter[Req, Rep] private[service] (
         standardServiceMetrics match {
           case Some(stats) =>
             stats.recordStats(request, response, duration)
+          case None => // no-op
+        }
+
+        requestsHistogramCounterOpt match {
+          case Some(requestsHistogramCounter) =>
+            requestsHistogramCounter.incr()
           case None => // no-op
         }
       }
