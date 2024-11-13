@@ -16,6 +16,10 @@ Runtime Behavior Changes
   stats cpu_time_ms and active_sockets per netty worker thread.
 * finagle-netty4: `EventLoopGroupTracker`  now collects the distribution of cpu utilization by each netty thread
   and all_sockets instead of active_sockets. ``PHAB_ID=D1177719``
+* finagle-core: `Backoff.exponentialJittered` now jitter the first duration. ``PHAB_ID=D1182252``
+* finalge-core: `Backoff.exponentialJittered` now uses a new range for jitters: `[dur/2; dur + dur/2]`.
+  Previously it was `[0, dur)`, which could result in `next.duration < duration`
+  for arbitrary long invocation chains. ``PHAB_ID=D1182252``
 
 
 New Features

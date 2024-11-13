@@ -49,11 +49,11 @@ object Rng {
     def nextLong(n: Long): Long = {
       require(n > 0)
 
-      // This is the algorithm used by Java's random number generator
-      // internally.
+      // This algorithm is inspired by Java's random number generator
       //   https://docs.oracle.com/javase/6/docs/api/java/util/Random.html#nextInt(int)
-      if ((n & -n) == n)
-        return r.nextLong() % n
+      val m = n - 1
+      if ((n & m) == 0L) // power of 2
+        return r.nextLong() & m
 
       var bits = 0L
       var v = 0L

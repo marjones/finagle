@@ -139,37 +139,45 @@ class BackoffTest extends AnyFunSuite with ScalaCheckDrivenPropertyChecks {
 
   test("exponentialJittered") {
     val exponentialGen = for {
-      startMs <- Gen.choose(1L, 1000L)
-      maxMs <- Gen.choose(startMs, startMs * 2)
+      startNs <- Gen.choose(1L, Long.MaxValue)
+      maxNs <- Gen.choose(startNs, Long.MaxValue)
       seed <- Gen.choose(Long.MinValue, Long.MaxValue)
-    } yield (startMs, maxMs, seed)
+    } yield (startNs, maxNs, seed)
 
     forAll(exponentialGen) {
-      case (startMs: Long, maxMs: Long, seed: Long) =>
-        val rng = Rng(seed)
-        var start = startMs.millis
-        val max = maxMs.millis
-        val backoff: Backoff = new ExponentialJittered(start, max, 1, Rng(seed))
-        val result: ArrayBuffer[Duration] = new ArrayBuffer[Duration]()
-        for (attempt <- 1 to 7) {
-          result.append(start)
-          start = nextStart(start, max, rng, attempt)
+      case (startNs: Long, maxNs: Long, seed: Long) =>
+        // I don't know why this if is needed, but it is
+        if (startNs > 0 && maxNs >= startNs) {
+          Array(Rng(seed), ZeroRng).foreach { rng =>
+            var backoff: Backoff = new ExponentialJittered(startNs, maxNs, rng)
+            var meanNs = startNs
+            var stop = false
+            while (!stop) {
+              val minExpected = Math.max(meanNs / 2, 1)
+              val maxExpected = if (meanNs + minExpected > meanNs) {
+                Math.min(meanNs + minExpected, maxNs)
+              } else { // overflow
+                maxNs
+              }
+              val actualDurNs = backoff.duration.inNanoseconds
+              assert(actualDurNs >= minExpected, backoff)
+              assert(actualDurNs <= maxExpected, backoff)
+
+              backoff = backoff.next
+              if (meanNs >= maxNs) {
+                assert(backoff.duration == Duration.fromNanoseconds(maxNs), backoff)
+                assert(backoff.next == backoff, backoff)
+                stop = true
+              } else {
+                meanNs = if (meanNs * 2 < meanNs) { // overflow
+                  Long.MaxValue
+                } else {
+                  meanNs * 2
+                }
+              }
+            }
+          }
         }
-        verifyBackoff(backoff, result.toSeq, exhausted = false)
-
-        // Verify case where Rng returns 0.
-        val zeroRng = getZeroRng(rng)
-        val zeroRngBackoff: Backoff = new ExponentialJittered(start, max, 1, zeroRng)
-        val expectedResults = Seq(start, nextStart(start, max, zeroRng, 1))
-        verifyBackoff(zeroRngBackoff, expectedResults, exhausted = false)
-    }
-
-    def nextStart(start: Duration, max: Duration, rng: Rng, attempt: Int): Duration = {
-      val shift = 1L << attempt
-      // to avoid Long overflow
-      val maxBackoff = if (start >= max / shift) max else start * shift
-      if (maxBackoff == max) max
-      else Duration.fromNanoseconds(1 + rng.nextLong(maxBackoff.inNanoseconds))
     }
   }
 
@@ -338,12 +346,12 @@ class BackoffTest extends AnyFunSuite with ScalaCheckDrivenPropertyChecks {
     assert(actualBackoff.isExhausted == exhausted)
   }
 
-  private[this] def getZeroRng(rng: Rng): Rng = new Rng {
-    override def nextDouble(): Double = rng.nextDouble()
+  private[this] object ZeroRng extends Rng {
+    override def nextDouble(): Double = 0.0
 
-    override def nextInt(n: Int): Int = rng.nextInt(n)
+    override def nextInt(n: Int): Int = 0
 
-    override def nextInt(): Int = rng.nextInt()
+    override def nextInt(): Int = 0
 
     override def nextLong(n: Long): Long = 0L
   }

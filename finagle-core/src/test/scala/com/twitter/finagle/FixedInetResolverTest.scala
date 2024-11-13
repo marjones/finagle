@@ -160,9 +160,17 @@ class FixedInetResolverTest extends AnyFunSuite {
       // since `ExponentialJittered` generates values randomly, we use the same
       // seed here in order to validate the values returned from `nBackoffs`.
       val nBackoffs: Backoff =
-        new ExponentialJittered(1.milliseconds, 100.milliseconds, 1, Rng(777)).take(shouldFailTimes)
+        new ExponentialJittered(
+          1.milliseconds.inNanoseconds,
+          100.milliseconds.inNanoseconds,
+          Rng(777)
+        ).take(shouldFailTimes)
       var actualBackoff: Backoff =
-        new ExponentialJittered(1.milliseconds, 100.milliseconds, 1, Rng(777)).take(shouldFailTimes)
+        new ExponentialJittered(
+          1.milliseconds.inNanoseconds,
+          100.milliseconds.inNanoseconds,
+          Rng(777)
+        ).take(shouldFailTimes)
       val mockTimer = new MockTimer
       val cache = FixedInetResolver.cache(resolve, maxCacheSize, nBackoffs, mockTimer)
       val resolver2 = new FixedInetResolver(cache, statsReceiver)

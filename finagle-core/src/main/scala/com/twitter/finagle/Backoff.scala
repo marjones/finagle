@@ -159,17 +159,22 @@ object Backoff {
   }
 
   /**
-   * The formula to calculate the next backoff is:
-   *{{{
-   *   backoff = random_between(0, min({@code maximum}, {@code start} * 2 ** attempt))
-   *}}}
+   * Current duration is:
+   * {{{
+   *   random_between(start/2, start + start/2)
+   * }}}
+   * but >= 1 and <= maximum.
+   *
+   * Next backoff is:
+   * {{{
+   *   exponentialJitterred(start * 2, maximum)
+   * }}}
+   * and Const(maximum) after start >= maximum
    *
    * @param start must be greater than 0 and less than or equal to `maximum`.
    * @param maximum must be greater than 0 and greater than or equal to
    *                `start`.
    *
-   * @note This is "full jitter" via
-   *       https://www.awsarchitectureblog.com/2015/03/backoff.html
    * @see [[decorrelatedJittered]] and [[equalJittered]] for alternative
    *      jittered approaches.
    */
@@ -182,7 +187,7 @@ object Backoff {
     // compare start and maximum here to avoid one
     // iteration of creating a new `ExponentialJittered`.
     if (start == maximum) new Const(start)
-    else new ExponentialJittered(start, maximum, 1, Rng.threadLocal)
+    else new ExponentialJittered(start.inNanoseconds, maximum.inNanoseconds, Rng.threadLocal)
   }
 
   /**
@@ -309,32 +314,42 @@ object Backoff {
   /** @see [[Backoff.exponentialJittered]] as the api to create this strategy. */
   // exposed for testing
   private[finagle] final class ExponentialJittered(
-    start: Duration,
-    maximum: Duration,
-    attempt: Int,
+    meanNanos: Long,
+    maxNanos: Long,
     rng: Rng)
       extends Backoff {
 
-    // Don't shift left more than 62 bits to avoid
-    // Long overflow of the multiplier `shift`.
-    private[this] final val MaxBitShift = 62
+    private[this] val backoffNanos = {
+      // gen random around min
+      val curMinNanos = Math.max(meanNanos >> 1, 1L)
+      var curMaxNanos = meanNanos + curMinNanos
+      if (curMaxNanos <= meanNanos) { // overflow
+        curMaxNanos = Long.MaxValue
+      }
+      Math.min(
+        curMinNanos + rng.nextLong(curMaxNanos - curMinNanos + 1L),
+        maxNanos
+      )
+    }
 
-    def duration: Duration = start
+    def duration: Duration = Duration.fromNanoseconds(backoffNanos)
 
     def next: Backoff = {
-      val shift = 1L << MaxBitShift.min(attempt)
-      // to avoid Long overflow
-      val maxBackoff = if (start >= maximum / shift) maximum else start * shift
-      if (maxBackoff == maximum) {
-        new Const(maximum)
+      if (meanNanos >= maxNanos) {
+        new Const(Duration.fromNanoseconds(maxNanos))
       } else {
-        // to avoid the case of random being 0
-        val random = 1 + rng.nextLong(maxBackoff.inNanoseconds)
-        new ExponentialJittered(Duration.fromNanoseconds(random), maximum, attempt + 1, rng)
+        var nextMeanNanos = meanNanos << 1
+        if (nextMeanNanos <= meanNanos) { // overflow
+          nextMeanNanos = Long.MaxValue
+        }
+        new ExponentialJittered(nextMeanNanos, maxNanos, rng)
       }
     }
 
     def isExhausted: Boolean = false
+
+    override def toString: String =
+      s"${this.getClass.getSimpleName}($meanNanos,$maxNanos)"
   }
 
   /** @see [[Backoff.take]] as the api to create this strategy. */
@@ -415,7 +430,7 @@ object Backoff {
  *   1. EqualJittered
  *     - Create backoffs that jitter between 0 and half of the exponential growth. Can be created via `Backoff.equalJittered`.
  *   1. ExponentialJittered
- *     - Create backoffs that jitter randomly between 0 and a value that grows exponentially by 2. Can be created via `Backoff.exponentialJittered`.
+ *     - Create backoffs that jitter randomly between value/2 and value+value/2 that grows exponentially by 2. Can be created via `Backoff.exponentialJittered`.
  *
  * @note A new [[Backoff]] will be created only when `next` is called.
  * @note None of the [[Backoff]]s are memoized, for strategies that involve
