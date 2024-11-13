@@ -2,7 +2,7 @@ package com.twitter.finagle.liveness
 
 import com.twitter.conversions.DurationOps._
 import com.twitter.finagle.Backoff
-import com.twitter.finagle.Backoff.EqualJittered
+import com.twitter.finagle.Backoff.ExponentialJittered
 import com.twitter.finagle.util.Rng
 import com.twitter.util._
 import org.scalatestplus.mockito.MockitoSugar
@@ -11,10 +11,10 @@ import org.scalatest.funsuite.AnyFunSuite
 class FailureAccrualPolicyTest extends AnyFunSuite with MockitoSugar {
 
   private[this] val constantBackoff = Backoff.const(5.seconds)
-  // since `EqualJittered` generates values randomly, we pass the seed
+  // since `ExponentialJittered` generates values randomly, we pass the seed
   // here in order to validate the values returned in the tests.
   private[this] def expBackoff(seed: Long) =
-    new EqualJittered(5.seconds, 5.seconds, 60.seconds, 1, Rng(seed))
+    new ExponentialJittered(5.seconds.inNanoseconds, 60.seconds.inNanoseconds, Rng(seed))
   private[this] def expBackoffList(seed: Long) = expBackoff(seed).take(6)
 
   test("Consecutive failures policy: fail on nth attempt") {
@@ -219,6 +219,7 @@ class FailureAccrualPolicyTest extends AnyFunSuite with MockitoSugar {
           expBackoffList(333),
           5,
           Stopwatch.timeMillis)
+      val backoff = expBackoffList(333)
 
       timeControl.advance(30.seconds)
 
@@ -226,7 +227,7 @@ class FailureAccrualPolicyTest extends AnyFunSuite with MockitoSugar {
       assert(policy.markDeadOnFailure() == None)
       assert(policy.markDeadOnFailure() == None)
       assert(policy.markDeadOnFailure() == None)
-      assert(policy.markDeadOnFailure() == Some(5.seconds))
+      assert(policy.markDeadOnFailure() == Some(backoff.duration))
     }
   }
 
@@ -245,36 +246,40 @@ class FailureAccrualPolicyTest extends AnyFunSuite with MockitoSugar {
 
   test("Hybrid policy: fail on nth attempt") {
     val policy = hybridPolicy
+    val backoff = expBackoff(333) // same as in hybridPolicy
     assert(policy.markDeadOnFailure() == None)
     assert(policy.markDeadOnFailure() == None)
-    assert(policy.markDeadOnFailure() == Some(5.seconds))
+    assert(policy.markDeadOnFailure() == Some(backoff.duration))
   }
 
   test("Hybrid policy: failures reset to zero on revived()") {
     val policy = hybridPolicy
+    val backoff = expBackoff(333) // same as in hybridPolicy
     assert(policy.markDeadOnFailure() == None)
 
     policy.revived()
 
     assert(policy.markDeadOnFailure() == None)
     assert(policy.markDeadOnFailure() == None)
-    assert(policy.markDeadOnFailure() == Some(5.seconds))
+    assert(policy.markDeadOnFailure() == Some(backoff.duration))
   }
 
   test("Hybrid policy: failures reset to zero on success") {
     val policy = hybridPolicy
+    val backoff = expBackoff(333) // same as in hybridPolicy
     assert(policy.markDeadOnFailure() == None)
 
     policy.recordSuccess()
 
     assert(policy.markDeadOnFailure() == None)
     assert(policy.markDeadOnFailure() == None)
-    assert(policy.markDeadOnFailure() == Some(5.seconds))
+    assert(policy.markDeadOnFailure() == Some(backoff.duration))
   }
 
   test("Hybrid policy: uses windowed success rate as well as consecutive failure") {
     Time.withCurrentTimeFrozen { timeControl =>
       val policy = hybridPolicy
+      val backoff = expBackoff(333)
 
       for (i <- 0 until 15) {
         policy.recordSuccess()
@@ -284,13 +289,13 @@ class FailureAccrualPolicyTest extends AnyFunSuite with MockitoSugar {
         timeControl.advance(1.second)
       }
 
-      assert(policy.markDeadOnFailure() == Some(5.seconds))
+      assert(policy.markDeadOnFailure() == Some(backoff.duration))
 
       policy.revived()
 
       assert(policy.markDeadOnFailure() == None)
       assert(policy.markDeadOnFailure() == None)
-      assert(policy.markDeadOnFailure() == Some(5.seconds))
+      assert(policy.markDeadOnFailure() == Some(backoff.duration))
     }
   }
 

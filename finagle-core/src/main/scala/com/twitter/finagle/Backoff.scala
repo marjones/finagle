@@ -120,8 +120,7 @@ object Backoff {
    * @param maximum must be greater than 0 and greater than or equal to
    *                `start`.
    *
-   * @see [[exponentialJittered]] and [[equalJittered]] for alternative
-   *      jittered approaches.
+   * @see [[exponentialJittered]] for alternative jittered approaches.
    */
   def decorrelatedJittered(start: Duration, maximum: Duration): Backoff = {
 
@@ -135,27 +134,9 @@ object Backoff {
     else new DecorrelatedJittered(start, maximum, Rng.threadLocal)
   }
 
-  /**
-   * Create backoffs that keep half of the exponential growth, and jitter
-   * between 0 and that amount.
-   *
-   * @param start must be greater than 0 and less than or equal to `maximum`.
-   * @param maximum must be greater than 0 and greater than or equal to
-   *                `start`.
-   *
-   * @see [[decorrelatedJittered]] and [[exponentialJittered]] for alternative
-   *      jittered approaches.
-   */
+  @deprecated("User `.exponentialJittered(Duration, Duration)` instead", "2024-11-13")
   def equalJittered(start: Duration, maximum: Duration): Backoff = {
-
-    require(start > Duration.Zero)
-    require(maximum > Duration.Zero)
-    require(start <= maximum)
-
-    // compare start and maximum here to avoid one
-    // iteration of creating a new `EqualJittered`.
-    if (start == maximum) new Const(start)
-    else new EqualJittered(start, start, maximum, 1, Rng.threadLocal)
+    exponentialJittered(start, maximum)
   }
 
   /**
@@ -175,8 +156,7 @@ object Backoff {
    * @param maximum must be greater than 0 and greater than or equal to
    *                `start`.
    *
-   * @see [[decorrelatedJittered]] and [[equalJittered]] for alternative
-   *      jittered approaches.
+   * @see [[decorrelatedJittered]] for alternative jittered approaches.
    */
   def exponentialJittered(start: Duration, maximum: Duration): Backoff = {
 
@@ -276,36 +256,6 @@ object Backoff {
 
       if (nextStart == maximum) new Const(maximum)
       else new DecorrelatedJittered(nextStart, maximum, rng)
-    }
-
-    def isExhausted: Boolean = false
-  }
-
-  /** @see [[Backoff.equalJittered]] as the api to create this strategy. */
-  // exposed for testing
-  private[finagle] final class EqualJittered(
-    startDuration: Duration,
-    nextDuration: Duration,
-    maximum: Duration,
-    attempt: Int,
-    rng: Rng)
-      extends Backoff {
-
-    // Don't shift left more than 62 bits to avoid
-    // Long overflow of the multiplier `shift`.
-    private[this] final val MaxBitShift = 62
-
-    def duration: Duration = nextDuration
-
-    def next: Backoff = {
-      val shift = 1L << MaxBitShift.min(attempt - 1)
-      // in case of Long overflow
-      val halfExp = if (startDuration >= maximum / shift) maximum else startDuration * shift
-      val randomBackoff = Duration.fromNanoseconds(rng.nextLong(halfExp.inNanoseconds))
-
-      // in case of Long overflow
-      if (halfExp == maximum || halfExp >= maximum - randomBackoff) new Const(maximum)
-      else new EqualJittered(startDuration, halfExp + randomBackoff, maximum, attempt + 1, rng)
     }
 
     def isExhausted: Boolean = false
@@ -427,14 +377,12 @@ object Backoff {
  *     - Create backoffs that grow linearly, can be created via `Backoff.linear`.
  *   1. DecorrelatedJittered
  *     - Create backoffs that jitter randomly between a start value and 3 times of that value, can be created via `Backoff.decorrelatedJittered`.
- *   1. EqualJittered
- *     - Create backoffs that jitter between 0 and half of the exponential growth. Can be created via `Backoff.equalJittered`.
  *   1. ExponentialJittered
  *     - Create backoffs that jitter randomly between value/2 and value+value/2 that grows exponentially by 2. Can be created via `Backoff.exponentialJittered`.
  *
  * @note A new [[Backoff]] will be created only when `next` is called.
  * @note None of the [[Backoff]]s are memoized, for strategies that involve
- *       randomness (`DecorrelatedJittered`, `EqualJittered` and
+ *       randomness (`DecorrelatedJittered` and
  *       `ExponentialJittered`), there is no way to foresee the next backoff
  *       value.
  * @note All [[Backoff]]s are infinite unless using [[take(Int)]] to create a

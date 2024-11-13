@@ -2,7 +2,6 @@ package com.twitter.finagle
 
 import com.twitter.conversions.DurationOps._
 import com.twitter.finagle.Backoff.DecorrelatedJittered
-import com.twitter.finagle.Backoff.EqualJittered
 import com.twitter.finagle.Backoff.ExponentialJittered
 import com.twitter.finagle.util.Rng
 import com.twitter.util.Duration
@@ -101,39 +100,6 @@ class BackoffTest extends AnyFunSuite with ScalaCheckDrivenPropertyChecks {
       val randRange = math.abs(upperbound.inNanoseconds - start.inNanoseconds)
       if (randRange == 0) start
       else Duration.fromNanoseconds(start.inNanoseconds + rng.nextLong(randRange))
-    }
-  }
-
-  test("equalJittered") {
-    val equalGen = for {
-      startMs <- Gen.choose(1L, 1000L)
-      maxMs <- Gen.choose(startMs, startMs * 2)
-      seed <- Gen.choose(Long.MinValue, Long.MaxValue)
-    } yield (startMs, maxMs, seed)
-
-    forAll(equalGen) {
-      case (startMs: Long, maxMs: Long, seed: Long) =>
-        val rng = Rng(seed)
-        val backoff: Backoff =
-          new EqualJittered(startMs.millis, startMs.millis, maxMs.millis, 1, Rng(seed))
-        val result: ArrayBuffer[Duration] = new ArrayBuffer[Duration]()
-        var start = startMs.millis
-        for (attempt <- 1 to 7) {
-          result.append(start)
-          start = nextStart(startMs.millis, maxMs.millis, rng, attempt)
-        }
-        verifyBackoff(backoff, result.toSeq, exhausted = false)
-    }
-
-    def nextStart(start: Duration, maximum: Duration, rng: Rng, attempt: Int): Duration = {
-      val shift = 1L << (attempt - 1)
-      // in case of Long overflow
-      val halfExp = if (start >= maximum / shift) maximum else start * shift
-      val randomBackoff = Duration.fromNanoseconds(rng.nextLong(halfExp.inNanoseconds))
-
-      // in case of Long overflow
-      if (halfExp == maximum || halfExp >= maximum - randomBackoff) maximum
-      else halfExp + randomBackoff
     }
   }
 

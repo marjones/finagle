@@ -371,7 +371,7 @@ The following example [#example]_ constructs an instance of ``RetryPolicy`` usin
   import com.twitter.conversions.DurationOps._
 
   val policy: RetryPolicy[Try[Response]] =
-    RetryPolicy.backoff(Backoff.equalJittered(10.milliseconds, 10.seconds)) {
+    RetryPolicy.backoff(Backoff.exponentialJittered(10.milliseconds, 10.seconds)) {
       case Return(rep) if rep.status == Status.InternalServerError => true
     }
 

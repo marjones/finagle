@@ -1,12 +1,12 @@
 package com.twitter.finagle.liveness
 
 import com.twitter.conversions.DurationOps._
-import com.twitter.finagle.Backoff.EqualJittered
 import com.twitter.finagle.service._
 import com.twitter.finagle.stats.InMemoryStatsReceiver
 import com.twitter.finagle.stats.NullStatsReceiver
 import com.twitter.finagle.util.Rng
 import com.twitter.finagle.Backoff
+import com.twitter.finagle.Backoff.ExponentialJittered
 import com.twitter.finagle._
 import com.twitter.util._
 import java.util.concurrent.TimeUnit
@@ -22,11 +22,10 @@ import scala.util.Random
 import org.scalatest.funsuite.AnyFunSuite
 
 class FailureAccrualFactoryTest extends AnyFunSuite with MockitoSugar {
-  // since `EqualJittered` generates values randomly, we pass the seed
+  // since `ExponentialJittered` generates values randomly, we pass the seed
   // here in order to validate the values returned in the tests.
   def markDeadFor(seed: Long): Backoff =
-    new EqualJittered(5.seconds, 5.seconds, 60.seconds, 1, Rng(seed))
-  def markDeadForList(seed: Long) = markDeadFor(seed).take(6)
+    new ExponentialJittered(5.seconds.inNanoseconds, 60.seconds.inNanoseconds, Rng(seed))
   def consecutiveFailures(seed: Long): FailureAccrualPolicy =
     FailureAccrualPolicy.consecutiveFailures(3, markDeadFor(seed))
 
@@ -284,7 +283,9 @@ class FailureAccrualFactoryTest extends AnyFunSuite with MockitoSugar {
 
       // Backoff to verify against from the backoff passed to create a FailureAccrual policy
       // Should make sure to use the same seed
-      var backoffs = new EqualJittered(5.seconds, 5.seconds, 60.seconds, 1, Rng(8888)).take(6)
+      var backoffs =
+        new ExponentialJittered(5.seconds.inNanoseconds, 60.seconds.inNanoseconds, Rng(8888))
+          .take(6)
       while (!backoffs.isExhausted) {
         assert(statsReceiver.counters.get(List("removals")) == Some(1))
         assert(!factory.isAvailable)
@@ -323,9 +324,11 @@ class FailureAccrualFactoryTest extends AnyFunSuite with MockitoSugar {
 
   test("backoff should be 5 minutes when stream runs out") {
     // Backoff to pass to create a FailureAccrual policy
-    val markDeadForFA = new EqualJittered(5.seconds, 5.seconds, 60.seconds, 1, Rng(7777)).take(3)
+    val markDeadForFA =
+      new ExponentialJittered(5.seconds.inNanoseconds, 60.seconds.inNanoseconds, Rng(7777)).take(3)
     // Backoff to verify, should use the same seed as the policy passed to FA
-    var markDeadFor = new EqualJittered(5.seconds, 5.seconds, 60.seconds, 1, Rng(7777)).take(3)
+    var markDeadFor =
+      new ExponentialJittered(5.seconds.inNanoseconds, 60.seconds.inNanoseconds, Rng(7777)).take(3)
 
     val statsReceiver = new InMemoryStatsReceiver()
     val underlyingService = mock[Service[Int, Int]]
@@ -433,7 +436,9 @@ class FailureAccrualFactoryTest extends AnyFunSuite with MockitoSugar {
 
       // Backoff to verify against from the backoff passed to create a FailureAccrual policy
       // Should make sure to use the same seed
-      var markDeadFor = new EqualJittered(5.seconds, 5.seconds, 60.seconds, 1, Rng(9999)).take(6)
+      var markDeadFor =
+        new ExponentialJittered(5.seconds.inNanoseconds, 60.seconds.inNanoseconds, Rng(9999))
+          .take(6)
       for (_ <- 1 until 6) {
         // After another failure, the service should be unavailable
         intercept[Exception] {

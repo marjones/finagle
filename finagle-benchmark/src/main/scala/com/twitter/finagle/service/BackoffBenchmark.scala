@@ -19,9 +19,6 @@ class BackoffBenchmark extends StdBenchAnnotations {
   def constant(state: Constant): Duration = state.next()
 
   @Benchmark
-  def equalJittered(state: EqualJittered): Duration = state.next()
-
-  @Benchmark
   def exponentialJittered(state: ExponentialJittered): Duration = state.next()
 
   @Benchmark
@@ -48,12 +45,6 @@ object BackoffBenchmark {
   class Constant
       extends BackoffState(
         Backoff.const(10.seconds).concat(Backoff.const(300.seconds))
-      )
-
-  @State(Scope.Thread)
-  class EqualJittered
-      extends BackoffState(
-        Backoff.equalJittered(5.seconds, 300.seconds).concat(Backoff.const(300.seconds))
       )
 
   @State(Scope.Thread)

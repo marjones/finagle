@@ -1,10 +1,13 @@
 package com.twitter.finagle.liveness
 
 import com.twitter.conversions.DurationOps._
-import com.twitter.finagle.Stack.{Params, Role}
+import com.twitter.finagle.Stack.Params
+import com.twitter.finagle.Stack.Role
 import com.twitter.finagle._
 import com.twitter.finagle.client.Transporter
-import com.twitter.finagle.service.{ReqRep, ResponseClass, ResponseClassifier}
+import com.twitter.finagle.service.ReqRep
+import com.twitter.finagle.service.ResponseClass
+import com.twitter.finagle.service.ResponseClassifier
 import com.twitter.finagle.stats.StatsReceiver
 import com.twitter.logging.Logger
 import com.twitter.util._
@@ -20,12 +23,13 @@ object FailureAccrualFactory {
   private[this] val DefaultMinimumRequestThreshold =
     FailureAccrualPolicy.DefaultMinimumRequestThreshold
 
-  // Use equalJittered backoff in order to wait more time in between
+  // Use exponentialJittered backoff in order to wait more time in between
   // each revival attempt on successive failures; if an endpoint has failed
   // previous requests, it is likely to do so again. The recent
   // "failure history" should influence how long to mark the endpoint
   // dead for.
-  private[finagle] val jitteredBackoff: Backoff = Backoff.equalJittered(5.seconds, 300.seconds)
+  private[finagle] val jitteredBackoff: Backoff =
+    Backoff.exponentialJittered(5.seconds, 300.seconds)
 
   private[finagle] def defaultPolicy: Function0[FailureAccrualPolicy] =
     new Function0[FailureAccrualPolicy] {
