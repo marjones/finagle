@@ -3,6 +3,7 @@ package com.twitter.finagle.client
 import com.twitter.finagle._
 import com.twitter.finagle.client.EndpointerStackClient.DimensionalClientScopes
 import com.twitter.finagle.filter.RequestLogger
+import com.twitter.finagle.filter.VerboseRequestTracer
 import com.twitter.finagle.naming.BindingFactory
 import com.twitter.finagle.param._
 import com.twitter.finagle.stack.nilStack
@@ -135,12 +136,18 @@ trait EndpointerStackClient[Req, Rep, This <: EndpointerStackClient[Req, Rep, Th
 
     val originalStack = {
       val baseStack = stack ++ (endpointer +: nilStack)
-      params[RequestLogger.Param] match {
+      val stackWithRequestTracing = params[RequestLogger.Param] match {
         case RequestLogger.Param.Enabled =>
           val transformer = RequestLogger.newStackTransformer(clientLabel)
           transformer(baseStack)
         case RequestLogger.Param.Disabled =>
           baseStack
+      }
+      params[VerboseRequestTracer.Param] match {
+        case VerboseRequestTracer.Param.Enabled =>
+          VerboseRequestTracer.stackTransformer(stackWithRequestTracing)
+        case VerboseRequestTracer.Param.Disabled =>
+          stackWithRequestTracing
       }
     }
 
