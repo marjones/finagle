@@ -82,6 +82,11 @@ val scroogeLibs = thriftLibs ++ Seq("com.twitter" %% "scrooge-core" % releaseVer
 
 val lz4Lib = "org.lz4" % "lz4-java" % "1.8.0"
 
+val zipkinLibs = Seq(
+  "io.zipkin.java" % "zipkin" % "1.28.1",
+  "io.zipkin.zipkin2" % "zipkin" % "2.22.1"
+)
+
 def util(which: String) =
   "com.twitter" %% ("util-" + which) % releaseVersion excludeAll (ExclusionRule(organization =
     "junit"),
@@ -482,7 +487,7 @@ lazy val finagleZipkinCore = Project(
     libraryDependencies ++= Seq(
       util("codec"),
       util("core"),
-      util("stats")) ++ scroogeLibs ++ jacksonLibs
+      util("stats")) ++ scroogeLibs ++ jacksonLibs ++ zipkinLibs
   ).dependsOn(finagleCore % "compile->compile;test->test", finagleThrift)
 
 lazy val finagleZipkinScribe = Project(

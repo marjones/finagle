@@ -12,6 +12,8 @@ scala_library(
         "3rdparty/jvm/com/fasterxml/jackson/core:jackson-core",
         "3rdparty/jvm/com/fasterxml/jackson/core:jackson-databind",
         "3rdparty/jvm/com/fasterxml/jackson/module:jackson-module-scala",
+        "3rdparty/jvm/io/zipkin/java:zipkin-core",
+        "3rdparty/jvm/io/zipkin/java:zipkin2",
         "3rdparty/jvm/org/apache/thrift:libthrift",
         "finagle/finagle-core/src/main",
         "finagle/finagle-thrift/src/main/java",
