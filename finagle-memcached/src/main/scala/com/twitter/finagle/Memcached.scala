@@ -6,6 +6,7 @@ import com.twitter.hashing
 import com.twitter.finagle.client._
 import com.twitter.finagle.dispatch.SerialServerDispatcher
 import com.twitter.finagle.dispatch.StalledPipelineTimeout
+import com.twitter.finagle.filter.OffloadFilter
 import com.twitter.finagle.liveness.FailureAccrualFactory
 import com.twitter.finagle.liveness.FailureAccrualPolicy
 import com.twitter.finagle.loadbalancer.Balancers
@@ -268,6 +269,12 @@ object Memcached extends finagle.Client[Command, Response] with finagle.Server[C
               BindingFactory.role,
               MemcachedPartitioningService.module
             )
+            // We want offloading to happen after partitioning, i.e. after all responses are collected
+            // to reduce pressure on offload pool
+            .remove(OffloadFilter.Role)
+            .insertBefore(
+              MemcachedPartitioningService.role,
+              OffloadFilter.client[Command, Response])
             // We want this to go after the MemcachedPartitioningService so that we can get individual
             // spans for fanout requests. It's currently at protoTracing, so we remove it to re-add below
             .remove(MemcachedTracingFilter.memcachedTracingModule.role)
