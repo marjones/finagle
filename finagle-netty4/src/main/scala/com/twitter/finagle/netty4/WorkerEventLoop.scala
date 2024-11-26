@@ -2,6 +2,7 @@ package com.twitter.finagle.netty4
 
 import com.twitter.finagle.stats.FinagleStatsReceiver
 import com.twitter.finagle.util.BlockingTimeTrackingThreadFactory
+import com.twitter.util.logging.Logger
 import io.netty.channel.EventLoopGroup
 import io.netty.channel.epoll.Epoll
 import io.netty.channel.epoll.EpollEventLoopGroup
@@ -18,6 +19,8 @@ import java.util.concurrent.ThreadFactory
  * Utilities to create and reuse Netty 4 worker threads.
  */
 private object WorkerEventLoop {
+
+  private[this] val log = Logger.getLogger(getClass.getName)
 
   private[this] val workerPoolSize = new AtomicInteger(0)
 
@@ -63,15 +66,27 @@ private object WorkerEventLoop {
 
   def make(executor: Executor, numWorkers: Int, ioRatio: Int = 50): EventLoopGroup = {
     workerPoolSize.addAndGet(numWorkers)
-    val result =
-      if (useNativeEpoll() && Epoll.isAvailable) {
-        val group = new EpollEventLoopGroup(numWorkers, executor)
-        group.setIoRatio(ioRatio)
-        group
-      } else {
-        new NioEventLoopGroup(numWorkers, executor)
+    val result = if (epollEventLoopGroupClassName().nonEmpty) {
+      val clz = Class.forName(epollEventLoopGroupClassName())
+      val eventLoopGroup = clz
+        .getConstructor(classOf[Int], classOf[Executor])
+        .newInstance(java.lang.Integer.valueOf(numWorkers), executor)
+      try {
+        val setIoRatioMethod = clz.getMethod("setIoRatio", classOf[Int])
+        setIoRatioMethod.invoke(eventLoopGroup, java.lang.Integer.valueOf(ioRatio))
+      } catch {
+        case _: NoSuchMethodException | _: SecurityException => // no-op
       }
+      eventLoopGroup.asInstanceOf[EventLoopGroup]
+    } else if (useNativeEpoll() && Epoll.isAvailable) {
+      val group = new EpollEventLoopGroup(numWorkers, executor)
+      group.setIoRatio(ioRatio)
+      group
+    } else {
+      new NioEventLoopGroup(numWorkers, executor)
+    }
 
+    log.info(s"Created event loop group: ${result.getClass.getName}")
     eventLoopGroups.add(result)
 
     result

@@ -28,6 +28,7 @@ New Features
 * finagle-mysql: Added support for LONG_BLOB data type. ``PHAB_ID=D1152247``
 * finagle-mux: Added a stat, <server_label>/mux/request_context_bytes, that shows the size of the received
   context per request.
+* finagle-netty4: Added support for custom event loop implementations. ``PHAB_ID=D1185136``
 
 
 Bug Fixes
