@@ -238,7 +238,8 @@ object Memcached extends finagle.Client[Command, Response] with finagle.Server[C
         new PipeliningClientPushSession[Response, Command](
           handle,
           params[StalledPipelineTimeout].timeout,
-          params[finagle.param.Timer].timer
+          params[finagle.param.Timer].timer,
+          statsReceiver = params[Stats].statsReceiver,
         )
       )
     }

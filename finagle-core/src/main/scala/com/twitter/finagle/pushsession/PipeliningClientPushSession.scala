@@ -5,6 +5,12 @@ import com.twitter.finagle.Failure
 import com.twitter.finagle.FailureFlags
 import com.twitter.finagle.Service
 import com.twitter.finagle.Status
+import com.twitter.finagle.stats.DefaultStatsReceiver
+import com.twitter.finagle.stats.HistogramFormat
+import com.twitter.finagle.stats.MetricBuilder
+import com.twitter.finagle.stats.MetricBuilder.HistogramType
+import com.twitter.finagle.stats.MetricUsageHint
+import com.twitter.finagle.stats.StatsReceiver
 import com.twitter.logging.Logger
 import com.twitter.util._
 
@@ -22,13 +28,29 @@ import com.twitter.util._
  * result of another request unless the connection is stuck, and does not
  * look like it will make progress. Use `stallTimeout` to configure this timeout.
  */
-final class PipeliningClientPushSession[In, Out](
+class PipeliningClientPushSession[In, Out](
   handle: PushChannelHandle[In, Out],
   stallTimeout: Duration,
-  timer: Timer)
+  timer: Timer,
+  statsReceiver: StatsReceiver = DefaultStatsReceiver)
     extends PushSession[In, Out](handle) { self =>
 
   private[this] val logger = Logger.get
+  private[this] val scopedStatsReceived = statsReceiver.scope("pipelining_client")
+  private[this] val epollQueueDelay = scopedStatsReceived.stat(
+    MetricBuilder(metricType = HistogramType)
+      .withHistogramFormat(HistogramFormat.FullSummary)
+      .withPercentiles(0.5, 0.9, 0.99, 0.999, 0.9999)
+      .withMetricUsageHints(Set(MetricUsageHint.HighContention))
+      .withName("epoll_queue_delay_ns")
+  )
+  private[this] val messageSendLatency = scopedStatsReceived.stat(
+    MetricBuilder(metricType = HistogramType)
+      .withHistogramFormat(HistogramFormat.FullSummary)
+      .withPercentiles(0.5, 0.9, 0.99, 0.999, 0.9999)
+      .withMetricUsageHints(Set(MetricUsageHint.HighContention))
+      .withName("message_send_latency_ns")
+  )
 
   // used only within SerialExecutor
   private[this] val h_queue = new java.util.ArrayDeque[Promise[In]]()
@@ -93,7 +115,9 @@ final class PipeliningClientPushSession[In, Out](
             })
           }
       }
-      handle.serialExecutor.execute(new Runnable { def run(): Unit = handleDispatch(request, p) })
+
+      val requestStartTime = System.nanoTime()
+      handle.serialExecutor.execute(() => handleDispatch(request, p, requestStartTime))
       p
     }
 
@@ -123,12 +147,16 @@ final class PipeliningClientPushSession[In, Out](
       }
     }
 
-  private[this] def handleDispatch(request: Out, p: Promise[In]): Unit = {
+  private[this] def handleDispatch(request: Out, p: Promise[In], requestStartTime: Long): Unit = {
+    val handleStartTime = System.nanoTime()
+    epollQueueDelay.add(handleStartTime - requestStartTime)
     if (!h_running) p.setException(new ChannelClosedException(handle.remoteAddress))
     else {
       h_queue.offer(p)
       h_queueSize += 1
-      handle.sendAndForget(request)
+      handle.send(request) { _ =>
+        messageSendLatency.add(System.nanoTime() - handleStartTime)
+      }
     }
   }
 }

@@ -21,6 +21,8 @@ Runtime Behavior Changes
   Previously it was `[0, dur)`, which could result in `next.duration < duration`
   for arbitrary long invocation chains. ``PHAB_ID=D1182252``
 * finagle-core: `Backoff.equalJittered` is now deprecated and falls back to `exponentialJittered`. ``PHAB_ID=D1182535``
+* finagle-core: `PipeliningClientPushSession` now collects stats `epoll_queue_delay_ns` and `message_send_latency_ns`.
+  ``PHAB_ID=D1185421``
 
 New Features
 ~~~~~~~~~~
