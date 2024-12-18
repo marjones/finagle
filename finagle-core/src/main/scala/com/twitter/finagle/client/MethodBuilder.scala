@@ -123,7 +123,7 @@ object MethodBuilder {
     retry: MethodBuilderRetry.Config,
     timeout: MethodBuilderTimeout.Config,
     filter: Filter.TypeAgnostic = Filter.typeAgnosticIdentity,
-    backup: Option[BackupRequestFilter.Param] = None)
+    backup: BackupRequestFilter.Param = BackupRequestFilter.Param.Disabled)
 
   /** Used by the `ClientRegistry` */
   private[client] val RegistryKey = "methods"
@@ -396,7 +396,7 @@ final class MethodBuilder[Req, Rep] private[finagle] (
       dest,
       stack,
       params,
-      config.copy(backup = Some(brfParam))
+      config.copy(backup = brfParam)
     )
 
     base.withRetry.forClassifier(idempotentedConfigClassifier)
@@ -436,7 +436,7 @@ final class MethodBuilder[Req, Rep] private[finagle] (
       dest,
       stack,
       params,
-      config.copy(backup = Some(BackupRequestFilter.Param.Disabled))
+      config.copy(backup = BackupRequestFilter.Param.Disabled)
     ).withRetry.forClassifier(nonidempotentedConfigClassifier)
   }
 
@@ -677,16 +677,9 @@ final class MethodBuilder[Req, Rep] private[finagle] (
 
     val underlying = methodPool.get
 
-    // If the user has not configured the backup requests via MethodBuilder (via `idempotent`,
-    // of `nonIdempotent`), use the configuration from the params (Disabled if none available).
-    val backupRequestParams = config.backup match {
-      case Some(backupRequestParam) =>
-        params +
-          backupRequestParam +
-          param.ResponseClassifier(config.retry.responseClassifier)
-      case None =>
-        params + param.ResponseClassifier(config.retry.responseClassifier)
-    }
+    val backupRequestParams = params +
+      config.backup +
+      param.ResponseClassifier(config.retry.responseClassifier)
 
     // register BackupRequestFilter under the same prefixes as other method entries
     val prefixes = Seq(registryEntry().addr) ++ registryKeyPrefix(name)

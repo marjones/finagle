@@ -658,19 +658,16 @@ class MethodBuilderTest
 
     val stackClient = TestStackClient(stack, params)
     val initialMethodBuilder = MethodBuilder.from("with backups", stackClient)
-    assert(initialMethodBuilder.config.backup == None)
-
     val methodBuilder =
-      initialMethodBuilder.withConfig(
-        initialMethodBuilder.config.copy(backup = Some(configuredBrfParam)))
+      initialMethodBuilder.withConfig(initialMethodBuilder.config.copy(backup = configuredBrfParam))
 
     // Ensure BRF is configured before calling `nonIdempotent`
-    assert(methodBuilder.config.backup == Some(configuredBrfParam))
+    assert(methodBuilder.config.backup == configuredBrfParam)
 
     val nonIdempotentClient = methodBuilder.nonIdempotent
 
     // Ensure BRF is disabled after calling `nonIdempotent`
-    assert(nonIdempotentClient.config.backup == Some(BackupRequestFilter.Disabled))
+    assert(nonIdempotentClient.config.backup == BackupRequestFilter.Disabled)
   }
 
   test("nonIdempotent client keeps existing ResponseClassifier in params ") {
@@ -799,9 +796,8 @@ class MethodBuilderTest
       .idempotent(1.percent, sendInterrupts = true, classifier)
 
     mb.config.backup match {
-      case Some(
-            BackupRequestFilter.Param
-              .Configured(maxExtraLoadTunable, sendInterrupts, minSendBackupAfterMs)) =>
+      case BackupRequestFilter.Param
+            .Configured(maxExtraLoadTunable, sendInterrupts, minSendBackupAfterMs) =>
         assert(
           maxExtraLoadTunable().get == 1.percent && sendInterrupts && minSendBackupAfterMs == 1)
       case _ => fail("BackupRequestFilter not configured")
@@ -866,9 +862,8 @@ class MethodBuilderTest
       .idempotent(tunable, sendInterrupts = true, ResponseClassifier.Default)
 
     assert(
-      mb.config.backup == Some(
-        BackupRequestFilter
-          .Configured(tunable, sendInterrupts = true))
+      mb.config.backup == BackupRequestFilter
+        .Configured(tunable, sendInterrupts = true)
     )
   }
 
@@ -885,13 +880,12 @@ class MethodBuilderTest
       .idempotent(tunable, sendInterrupts = true, ResponseClassifier.Default)
 
     assert(
-      mb.config.backup == Some(
-        BackupRequestFilter
-          .Configured(tunable, sendInterrupts = true))
+      mb.config.backup == BackupRequestFilter
+        .Configured(tunable, sendInterrupts = true)
     )
 
     val nonIdempotentMB = mb.nonIdempotent
-    assert(nonIdempotentMB.config.backup == Some(BackupRequestFilter.Disabled))
+    assert(nonIdempotentMB.config.backup == BackupRequestFilter.Disabled)
   }
 
   test("idempotent combines existing classifier with new one") {
@@ -1126,100 +1120,6 @@ class MethodBuilderTest
       .idempotent(1.percent, sendInterrupts = true, ResponseClassifier.Default)
 
     assert(client.params[Retries.Budget].retryBudget eq retryBudget)
-  }
-
-  test(
-    "BackupRequestFilter is configured with passed-in stack params when not configured in MethodBuilder") {
-    val stats = new InMemoryStatsReceiver()
-    val timer = new MockTimer()
-    val params =
-      Stack.Params.empty +
-        param.Stats(stats) +
-        param.Timer(timer) +
-        BackupRequestFilter.Configured(maxExtraLoad = 0.01, sendInterrupts = true)
-
-    val svc: Service[Int, Int] = Service.mk { i =>
-      Future.value(i)
-    }
-
-    val stack = Stack.leaf(Stack.Role("test"), ServiceFactory.const(svc))
-
-    val stackClient = TestStackClient(stack, Stack.Params.empty).withParams(params)
-    val mb = MethodBuilder.from("mb", stackClient)
-
-    Time.withCurrentTimeFrozen { tc =>
-      val client = mb.newService("a_client")
-      awaitResult(client(1))
-
-      tc.advance(10.seconds)
-      timer.tick()
-      assert(stats.stats.contains(Seq("mb", "a_client", "backups", "send_backup_after_ms")))
-    }
-  }
-
-  test(
-    "BackupRequestFilter is configured with MethodBuilder idempotent configuration when also configured via stack params") {
-    val stats = new InMemoryStatsReceiver()
-    val timer = new MockTimer()
-    val params =
-      Stack.Params.empty +
-        param.Stats(stats) +
-        param.Timer(timer) +
-        BackupRequestFilter.Disabled
-
-    val svc: Service[Int, Int] = Service.mk { i =>
-      Future.value(i)
-    }
-
-    val stack = Stack.leaf(Stack.Role("test"), ServiceFactory.const(svc))
-
-    val stackClient = TestStackClient(stack, Stack.Params.empty).withParams(params)
-    val classifier: ResponseClassifier = ResponseClassifier.named("foo") {
-      case ReqRep(_, Throw(_: IndividualRequestTimeoutException)) =>
-        ResponseClass.RetryableFailure
-    }
-
-    // MB config should take precedence
-    val mb = MethodBuilder.from("mb", stackClient).idempotent(0.05, true, classifier)
-
-    Time.withCurrentTimeFrozen { tc =>
-      val client = mb.newService("a_client")
-      awaitResult(client(1))
-
-      tc.advance(10.seconds)
-      timer.tick()
-      assert(stats.stats.contains(Seq("mb", "a_client", "backups", "send_backup_after_ms")))
-    }
-  }
-
-  test(
-    "BackupRequestFilter is configured with MethodBuilder nonIdempotent configuration when also configured via stack params") {
-    val stats = new InMemoryStatsReceiver()
-    val timer = new MockTimer()
-    val params =
-      Stack.Params.empty +
-        param.Stats(stats) +
-        param.Timer(timer) +
-        BackupRequestFilter.Configured(maxExtraLoad = 0.01, sendInterrupts = true)
-
-    val svc: Service[Int, Int] = Service.mk { i =>
-      Future.value(i)
-    }
-
-    val stack = Stack.leaf(Stack.Role("test"), ServiceFactory.const(svc))
-
-    val stackClient = TestStackClient(stack, Stack.Params.empty).withParams(params)
-    // MB config should take precedence
-    val mb = MethodBuilder.from("mb", stackClient).nonIdempotent
-
-    Time.withCurrentTimeFrozen { tc =>
-      val client = mb.newService("a_client")
-      awaitResult(client(1))
-
-      tc.advance(10.seconds)
-      timer.tick()
-      assert(!stats.stats.contains(Seq("mb", "a_client", "backups", "send_backup_after_ms")))
-    }
   }
 
   test("shares RetryBudget between methods") {
