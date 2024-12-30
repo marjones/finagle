@@ -65,6 +65,19 @@ object OffloadFilter {
   private[finagle] def server[Req, Rep]: Stackable[ServiceFactory[Req, Rep]] =
     new ServerModule[Req, Rep]
 
+  private[this] val offloadsDisabledLocal = new Local[Unit]
+
+  /**
+   * Disables offloads for the enclosed scope.
+   * The scope must return Unit,
+   * this ensures no callbacks can be added to the result.
+   */
+  def withOffloadsDisabled(f: => Unit): Unit = {
+    offloadsDisabledLocal.let(()) {
+      f
+    }
+  }
+
   final class Client[Req, Rep](pool: FuturePool, statsReceiver: StatsReceiver)
       extends SimpleFilter[Req, Rep] {
 
@@ -98,21 +111,26 @@ object OffloadFilter {
       // You would be surprised but this can happen. Same simulations report that we lose a race in
       // about 1 in 1 000 000 of cases this way (0.0001%).
       val response = service(request)
-      val shifted = Promise.interrupts[Rep](response)
-      response.respond { t =>
-        pool {
-          val startNs = System.nanoTime()
-          shifted.update(t)
-          applyTimeNs.add(System.nanoTime() - startNs)
+      if (offloadsDisabledLocal().isDefined) {
+        response
+
+      } else {
+        val shifted = Promise.interrupts[Rep](response)
+        response.respond { t =>
+          pool {
+            val startNs = System.nanoTime()
+            shifted.update(t)
+            applyTimeNs.add(System.nanoTime() - startNs)
+          }
+
+          val tracing = Trace()
+          if (tracing.isActivelyTracing) {
+            tracing.recordBinary(ClientAnnotationKey, pool.poolSize)
+          }
         }
 
-        val tracing = Trace()
-        if (tracing.isActivelyTracing) {
-          tracing.recordBinary(ClientAnnotationKey, pool.poolSize)
-        }
+        shifted
       }
-
-      shifted
     }
   }
 
