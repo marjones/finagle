@@ -1,8 +1,8 @@
 package com.twitter.finagle.filter
 
 import com.twitter.finagle.FailureFlags
-import com.twitter.finagle.stats.StatsReceiver
-import com.twitter.finagle.param
+import com.twitter.finagle.Filter
+import com.twitter.finagle.Filter.TypeAgnostic
 import com.twitter.finagle.Service
 import com.twitter.finagle.ServiceFactory
 import com.twitter.finagle.SimpleFilter
@@ -11,6 +11,7 @@ import com.twitter.finagle.Stackable
 import com.twitter.finagle.service.ReqRep
 import com.twitter.finagle.service.ResponseClass
 import com.twitter.finagle.service.ResponseClassifier
+import com.twitter.finagle.stats.StatsReceiver
 import com.twitter.util.Duration
 import com.twitter.util.Future
 import com.twitter.util.Stopwatch
@@ -26,7 +27,7 @@ private[twitter] object SLOStatsFilter {
 
   object Param {
     case class Configured(
-      latency: Duration)
+      requestToSLODefinition: PartialFunction[Any, SLODefinition])
         extends Param
 
     case object Disabled extends Param
@@ -36,71 +37,103 @@ private[twitter] object SLOStatsFilter {
 
   val Disabled: Param = Param.Disabled
 
-  def configured(latency: Duration): Param = {
-    Param.Configured(latency)
+  def configured(
+    requestToSLODefinition: PartialFunction[Any, SLODefinition],
+  ): Param = {
+    Param.Configured(requestToSLODefinition)
+  }
+
+  def configured(SLODefinition: SLODefinition): Param = {
+    Param.Configured({
+      case _ => SLODefinition
+    })
+  }
+
+  def typeAgnostic(
+    statsReceiver: StatsReceiver,
+    requestToSLODefinition: PartialFunction[Any, SLODefinition],
+    responseClassifier: ResponseClassifier,
+    nowNanos: () => Long = Stopwatch.systemNanos
+  ): TypeAgnostic = new TypeAgnostic {
+    def toFilter[Req, Rep]: Filter[Req, Rep, Req, Rep] =
+      new SLOStatsFilter[Req, Rep](
+        requestToSLODefinition,
+        responseClassifier,
+        statsReceiver,
+        nowNanos)
   }
 
   def module[Req, Rep]: Stackable[ServiceFactory[Req, Rep]] =
-    new Stack.Module3[param.Stats, param.ResponseClassifier, Param, ServiceFactory[Req, Rep]] {
+    new Stack.Module3[
+      com.twitter.finagle.param.Stats,
+      com.twitter.finagle.param.ResponseClassifier,
+      Param,
+      ServiceFactory[Req, Rep]
+    ] {
       val role = SLOStatsFilter.role
       val description =
         "Record number of SLO violations of underlying service"
       override def make(
-        _stats: param.Stats,
-        _responseClassifier: param.ResponseClassifier,
+        _stats: com.twitter.finagle.param.Stats,
+        _responseClassifier: com.twitter.finagle.param.ResponseClassifier,
         params: Param,
         next: ServiceFactory[Req, Rep]
       ): ServiceFactory[Req, Rep] = {
         params match {
           case Param.Disabled => next
-          case Param.Configured(latency) =>
-            val param.Stats(statsReceiver) = _stats
-            val param.ResponseClassifier(responseClassifier) = _responseClassifier
+          case Param.Configured(requestToSLODefinition) =>
+            val com.twitter.finagle.param.Stats(statsReceiver) = _stats
+            val com.twitter.finagle.param.ResponseClassifier(responseClassifier) =
+              _responseClassifier
+
             new SLOStatsFilter(
-              statsReceiver.scope("slo"),
-              latency.inNanoseconds,
-              responseClassifier).andThen(next)
+              requestToSLODefinition,
+              responseClassifier,
+              statsReceiver.scope("slo")).andThen(next)
         }
       }
     }
 }
 
+case class SLODefinition(scope: String, latency: Duration)
+
 /**
- * A [[com.twitter.finagle.Filter]] that records the number of slo violations from the underlying
- * service. A request is classified as violating the slo if any of the following occur:
+ * A [[com.twitter.finagle.Filter]] that records the number of slo violations (as determined from
+ * `requestToSLODefinition`) from the underlying service. A request is classified as violating the
+ * slo if any of the following occur:
  * - The response returns after `latency` duration has elapsed
  * - The response is classified as a failure according to the ResponseClassifier (but is not
  *   ignorable or interrupted)
  */
-private[finagle] class SLOStatsFilter[Req, Rep](
-  statsReceiver: StatsReceiver,
-  latencyNanos: Long,
+class SLOStatsFilter[Req, Rep](
+  requestToSLODefinition: PartialFunction[Any, SLODefinition],
   responseClassifier: ResponseClassifier,
+  statsReceiver: StatsReceiver,
   nowNanos: () => Long = Stopwatch.systemNanos)
     extends SimpleFilter[Req, Rep] {
-
-  private[this] val violationsScope = statsReceiver.scope("violations")
-  private[this] val violationsTotalCounter = violationsScope.counter("total")
-  private[this] val violationsFailuresCounter = violationsScope.counter("failures")
-  private[this] val violationsLatencyCounter = violationsScope.counter("latency")
 
   def apply(request: Req, service: Service[Req, Rep]): Future[Rep] = {
     val start = nowNanos()
     service(request).respond { response =>
       if (!isIgnorable(response)) {
-        var violated = false
-        if (nowNanos() - start > latencyNanos) {
-          violated = true
-          violationsLatencyCounter.incr()
-        }
+        if (requestToSLODefinition.isDefinedAt(request)) {
+          val sloDefinition = requestToSLODefinition(request)
+          var violated = false
+          if (nowNanos() - start > sloDefinition.latency.inNanoseconds) {
+            violated = true
+            statsReceiver.counter(sloDefinition.scope, "violations", "latency").incr()
+          }
 
-        if (isFailure(request, response)) {
-          violated = true
-          violationsFailuresCounter.incr()
-        }
+          if (isFailure(request, response)) {
+            violated = true
+            statsReceiver.counter(sloDefinition.scope, "violations", "failures").incr()
+          }
 
-        if (violated) {
-          violationsTotalCounter.incr()
+          if (violated) {
+            statsReceiver.counter(sloDefinition.scope, "violations", "total").incr()
+          }
+
+          statsReceiver.counter(sloDefinition.scope, "total").incr()
         }
       }
     }
