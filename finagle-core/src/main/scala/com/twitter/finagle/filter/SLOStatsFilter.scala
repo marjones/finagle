@@ -115,26 +115,30 @@ class SLOStatsFilter[Req, Rep](
   def apply(request: Req, service: Service[Req, Rep]): Future[Rep] = {
     val start = nowNanos()
     service(request).respond { response =>
-      if (!isIgnorable(response)) {
-        if (requestToSLODefinition.isDefinedAt(request)) {
-          val sloDefinition = requestToSLODefinition(request)
-          var violated = false
-          if (nowNanos() - start > sloDefinition.latency.inNanoseconds) {
-            violated = true
-            statsReceiver.counter(sloDefinition.scope, "violations", "latency").incr()
-          }
+      record(request, response, nowNanos() - start)
+    }
+  }
 
-          if (isFailure(request, response)) {
-            violated = true
-            statsReceiver.counter(sloDefinition.scope, "violations", "failures").incr()
-          }
-
-          if (violated) {
-            statsReceiver.counter(sloDefinition.scope, "violations", "total").incr()
-          }
-
-          statsReceiver.counter(sloDefinition.scope, "total").incr()
+  def record(request: Req, response: Try[Rep], durationNanos: Long): Unit = {
+    if (!isIgnorable(response)) {
+      if (requestToSLODefinition.isDefinedAt(request)) {
+        val sloDefinition = requestToSLODefinition(request)
+        var violated = false
+        if (durationNanos > sloDefinition.latency.inNanoseconds) {
+          violated = true
+          statsReceiver.counter(sloDefinition.scope, "violations", "latency").incr()
         }
+
+        if (isFailure(request, response)) {
+          violated = true
+          statsReceiver.counter(sloDefinition.scope, "violations", "failures").incr()
+        }
+
+        if (violated) {
+          statsReceiver.counter(sloDefinition.scope, "violations", "total").incr()
+        }
+
+        statsReceiver.counter(sloDefinition.scope, "total").incr()
       }
     }
   }
