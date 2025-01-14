@@ -5,7 +5,9 @@ import com.twitter.finagle.stats.StatsReceiver
 import com.twitter.finagle.util.DefaultTimer
 import com.twitter.util.Duration
 import com.twitter.util.ExecutorServiceFuturePool
+import com.twitter.util.Future
 import com.twitter.util.FuturePool
+import com.twitter.util.Local
 import java.util.concurrent.ExecutorService
 
 /**
@@ -29,6 +31,19 @@ final class OffloadFuturePool(executor: ExecutorService, stats: StatsReceiver)
   val hasAdmissionControl: Boolean = admissionControl.isDefined
 }
 
+final class PriorityOffloadFuturePool(
+  normalPriorityPool: FuturePool,
+  lowPriorityFuturePool: FuturePool)
+    extends FuturePool {
+  override def apply[T](f: => T): Future[T] = {
+    if (OffloadFuturePool.lowPriorityLocal().isEmpty) {
+      normalPriorityPool.apply(f)
+    } else {
+      lowPriorityFuturePool.apply(f)
+    }
+  }
+}
+
 object OffloadFuturePool {
 
   /**
@@ -47,18 +62,40 @@ object OffloadFuturePool {
       numWorkers.get.orElse(if (auto()) Some(com.twitter.jvm.numProcs().ceil.toInt) else None)
     val maxQueueLen = maxQueueLength()
 
-    workers.map { threads =>
+    val normalPriorityPool = workers.map { threads =>
       val stats = FinagleStatsReceiver.scope("offload_pool")
-      val pool = new OffloadFuturePool(OffloadThreadPool(threads, maxQueueLen, stats), stats)
-
-      // Start sampling the offload delay if the interval isn't Duration.Top.
-      if (statsSampleInterval().isFinite && statsSampleInterval() > Duration.Zero) {
-        val sampleStats = new SampleQueueStats(pool, stats, DefaultTimer)
-        sampleStats()
-      }
-
-      pool
+      createPool(OffloadThreadPool(threads, maxQueueLen, stats), stats)
     }
+
+    val lowPriorityPool = lowPriorityNumWorkers.get.map { threads =>
+      val stats = FinagleStatsReceiver.scope("low_priority_offload_pool")
+      createPool(
+        new DefaultThreadPoolExecutor(threads, maxQueueLen, stats, "finagle/low-priority-offload"),
+        stats,
+      )
+    }
+
+    normalPriorityPool.map { normalPool =>
+      lowPriorityPool match {
+        case Some(lowPriorityPool) => new PriorityOffloadFuturePool(normalPool, lowPriorityPool)
+        case None => normalPool
+      }
+    }
+  }
+
+  private[this] def createPool(
+    executor: ExecutorService,
+    stats: StatsReceiver
+  ): FuturePool = {
+    val pool = new OffloadFuturePool(executor, stats)
+
+    // Start sampling the offload delay if the interval isn't Duration.Top.
+    if (statsSampleInterval().isFinite && statsSampleInterval() > Duration.Zero) {
+      val sampleStats = new SampleQueueStats(pool, stats, DefaultTimer)
+      sampleStats()
+    }
+
+    pool
   }
 
   /**
@@ -70,5 +107,11 @@ object OffloadFuturePool {
   def getPool: FuturePool = configuredPool match {
     case Some(pool) => pool
     case None => FuturePool.unboundedPool
+  }
+
+  val lowPriorityLocal = new Local[Unit]
+
+  def withLowPriorityOffloads[T](fn: => T): T = {
+    lowPriorityLocal.let(())(fn)
   }
 }

@@ -12,14 +12,15 @@ import java.util.concurrent.TimeUnit
 private[twitter] class DefaultThreadPoolExecutor(
   poolSize: Int,
   maxQueueLen: Int,
-  stats: StatsReceiver)
-    extends ThreadPoolExecutor(
+  stats: StatsReceiver,
+  name: String = "finagle/offload",
+) extends ThreadPoolExecutor(
       poolSize /*corePoolSize*/,
       poolSize /*maximumPoolSize*/,
       0L /*keepAliveTime*/,
       TimeUnit.MILLISECONDS,
       new LinkedBlockingQueue[Runnable](maxQueueLen) /*workQueue*/,
-      new NamedPoolThreadFactory("finagle/offload", makeDaemons = true) /*threadFactory*/,
+      new NamedPoolThreadFactory(name, makeDaemons = true) /*threadFactory*/,
       new RunsOnNettyThread(stats.counter("not_offloaded_tasks")))
 
 private object DefaultThreadPoolExecutor {
