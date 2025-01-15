@@ -40,6 +40,9 @@ Bug Fixes
 * finagle-memcached: Fixed support for running memcached tests with external memcached. Added README with
   instructions under finagle/finagle-memcached. ``PHAB_ID=D1120240``
 * finagle-core: Fixed a bug in `ExponentialJitteredBackoff` where `rng` can be 0. ``PHAB_ID=D1178528``
+* finagle-core: When `c.t.f.client.BackupRequestFilter` is configured via stack params,
+  use this configuration when using MethodBuilder if `idempotent`/`nonIdempotent` have
+  not been set. ``PHAB_ID=D1189436``
 
 
 Breaking API Changes
