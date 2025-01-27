@@ -1,24 +1,23 @@
 package com.twitter.finagle.netty4.pushsession
 
-import com.twitter.finagle.{
-  ChannelClosedException,
-  ChannelException,
-  Status,
-  UnknownChannelException
-}
-import com.twitter.finagle.pushsession.{PushChannelHandle, PushSession}
-import com.twitter.finagle.ssl.session.{NullSslSessionInfo, SslSessionInfo, UsingSslSessionInfo}
+import com.twitter.finagle.ChannelClosedException
+import com.twitter.finagle.ChannelException
+import com.twitter.finagle.Status
+import com.twitter.finagle.UnknownChannelException
+import com.twitter.finagle.pushsession.PushChannelHandle
+import com.twitter.finagle.pushsession.PushSession
+import com.twitter.finagle.ssl.session.NullSslSessionInfo
+import com.twitter.finagle.ssl.session.SslSessionInfo
+import com.twitter.finagle.ssl.session.UsingSslSessionInfo
 import com.twitter.finagle.stats.StatsReceiver
 import com.twitter.logging.Logger
 import com.twitter.util._
 import io.netty.buffer.ByteBuf
-import io.netty.channel.{
-  Channel,
-  ChannelHandlerContext,
-  ChannelInboundHandlerAdapter,
-  ChannelPipeline,
-  EventLoop
-}
+import io.netty.channel.Channel
+import io.netty.channel.ChannelHandlerContext
+import io.netty.channel.ChannelInboundHandlerAdapter
+import io.netty.channel.ChannelPipeline
+import io.netty.channel.EventLoop
 import io.netty.handler.ssl.SslHandler
 import io.netty.util
 import io.netty.util.concurrent.GenericFutureListener
@@ -142,10 +141,21 @@ private final class Netty4PushChannelHandle[In, Out] private (
   }
 
   // See note above about the scheduling of send messages
-  def send(message: Out)(continuation: (Try[Unit]) => Unit): Unit = {
+  def send(message: Out)(onComplete: (Try[Unit]) => Unit): Unit = {
     safeExecutor.safeExecute(new SafeRunnable {
-      def tryRun(): Unit = handleWriteAndFlush(message, continuation)
+      def tryRun(): Unit = handleWriteAndFlush(message, onComplete)
     })
+  }
+
+  def sendInsideEventLoop(message: Out)(onComplete: Try[Unit] => Unit): Unit = {
+    if (!ch.eventLoop().inEventLoop()) {
+      throw new IllegalStateException(
+        s"Expected to be called from within the `Channel`s " +
+          s"associated `EventLoop` (${ch.eventLoop}), instead called " +
+          s"from thread ${Thread.currentThread}")
+    }
+
+    handleWriteAndFlush(message, onComplete)
   }
 
   // See note above about the scheduling of send messages
@@ -268,9 +278,13 @@ private final class Netty4PushChannelHandle[In, Out] private (
 
     override def channelRead(ctx: ChannelHandlerContext, msg: Any): Unit = {
       val m = msg.asInstanceOf[In]
-      safeExecutor.safeExecute(new SafeRunnable {
-        def tryRun(): Unit = session.receive(m)
-      })
+      if (!ctx.channel().eventLoop().inEventLoop()) {
+        safeExecutor.safeExecute(new SafeRunnable {
+          def tryRun(): Unit = session.receive(m)
+        })
+      } else {
+        session.receive(m)
+      }
     }
 
     override def channelInactive(ctx: ChannelHandlerContext): Unit =

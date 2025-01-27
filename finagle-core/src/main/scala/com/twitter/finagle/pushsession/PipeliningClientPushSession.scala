@@ -154,7 +154,7 @@ class PipeliningClientPushSession[In, Out](
     else {
       h_queue.offer(p)
       h_queueSize += 1
-      handle.send(request) { _ =>
+      handle.sendInsideEventLoop(request) { _ =>
         messageSendLatency.add(System.nanoTime() - handleStartTime)
       }
     }

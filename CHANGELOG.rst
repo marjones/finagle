@@ -23,6 +23,7 @@ Runtime Behavior Changes
 * finagle-core: `Backoff.equalJittered` is now deprecated and falls back to `exponentialJittered`. ``PHAB_ID=D1182535``
 * finagle-core: `PipeliningClientPushSession` now collects stats `epoll_queue_delay_ns` and `message_send_latency_ns`.
   ``PHAB_ID=D1185421``
+* finagle-core: Halve Netty tasks in Netty4 pipeline client. ``PHAB_ID=D1193718``
 
 New Features
 ~~~~~~~~~~

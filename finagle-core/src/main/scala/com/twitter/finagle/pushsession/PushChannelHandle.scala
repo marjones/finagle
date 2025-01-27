@@ -1,8 +1,10 @@
 package com.twitter.finagle.pushsession
 
-import com.twitter.finagle.{ClientConnection, Status}
+import com.twitter.finagle.ClientConnection
+import com.twitter.finagle.Status
 import com.twitter.finagle.ssl.session.SslSessionInfo
-import com.twitter.util.{Closable, Try}
+import com.twitter.util.Closable
+import com.twitter.util.Try
 import java.util.concurrent.Executor
 
 /**
@@ -59,6 +61,8 @@ trait PushChannelHandle[In, Out] extends Closable with ClientConnection {
    *       that this method call will return before `onComplete` is run.
    */
   def send(message: Out)(onComplete: Try[Unit] => Unit): Unit
+
+  def sendInsideEventLoop(message: Out)(onComplete: Try[Unit] => Unit): Unit
 
   /**
    * Write a message to the underlying IO pipeline.

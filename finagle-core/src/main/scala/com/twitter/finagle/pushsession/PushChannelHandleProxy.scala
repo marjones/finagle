@@ -2,7 +2,9 @@ package com.twitter.finagle.pushsession
 
 import com.twitter.finagle.Status
 import com.twitter.finagle.ssl.session.SslSessionInfo
-import com.twitter.util.{Future, Time, Try}
+import com.twitter.util.Future
+import com.twitter.util.Time
+import com.twitter.util.Try
 import java.net.SocketAddress
 import java.util.concurrent.Executor
 
@@ -24,6 +26,10 @@ abstract class PushChannelHandleProxy[In, Out](underlying: PushChannelHandle[In,
 
   def send(message: Out)(onComplete: (Try[Unit]) => Unit): Unit =
     underlying.send(message)(onComplete)
+
+  def sendInsideEventLoop(message: Out)(onComplete: Try[Unit] => Unit): Unit = {
+    underlying.sendInsideEventLoop(message)(onComplete)
+  }
 
   def sendAndForget(message: Out): Unit = underlying.sendAndForget(message)
 

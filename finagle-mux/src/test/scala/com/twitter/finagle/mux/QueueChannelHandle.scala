@@ -1,11 +1,20 @@
 package com.twitter.finagle.mux
 
 import com.twitter.concurrent.AsyncQueue
-import com.twitter.finagle.{ChannelClosedException, Status}
-import com.twitter.finagle.pushsession.{PushChannelHandle, PushSession, SentinelSession}
-import com.twitter.finagle.ssl.session.{NullSslSessionInfo, SslSessionInfo}
+import com.twitter.finagle.ChannelClosedException
+import com.twitter.finagle.Status
+import com.twitter.finagle.pushsession.PushChannelHandle
+import com.twitter.finagle.pushsession.PushSession
+import com.twitter.finagle.pushsession.SentinelSession
+import com.twitter.finagle.ssl.session.NullSslSessionInfo
+import com.twitter.finagle.ssl.session.SslSessionInfo
 import com.twitter.finagle.util.Updater
-import com.twitter.util.{Future, Promise, Return, Throw, Time, Try}
+import com.twitter.util.Future
+import com.twitter.util.Promise
+import com.twitter.util.Return
+import com.twitter.util.Throw
+import com.twitter.util.Time
+import com.twitter.util.Try
 import java.net.SocketAddress
 import java.util.concurrent.Executor
 import scala.util.control.NonFatal
@@ -71,6 +80,9 @@ private[mux] class QueueChannelHandle[In, Out](destinationQueue: AsyncQueue[Out]
   }
 
   def send(message: Out)(onComplete: Try[Unit] => Unit): Unit =
+    send(message :: Nil)(onComplete)
+
+  def sendInsideEventLoop(message: Out)(onComplete: Try[Unit] => Unit): Unit =
     send(message :: Nil)(onComplete)
 
   def send(messages: Iterable[Out])(onComplete: Try[Unit] => Unit): Unit = {

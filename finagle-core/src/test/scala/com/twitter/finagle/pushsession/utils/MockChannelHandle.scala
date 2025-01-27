@@ -1,10 +1,17 @@
 package com.twitter.finagle.pushsession.utils
 
 import com.twitter.finagle.Status
-import com.twitter.finagle.pushsession.{PushChannelHandle, PushSession}
-import com.twitter.finagle.ssl.session.{NullSslSessionInfo, SslSessionInfo}
-import com.twitter.util.{Future, Promise, Return, Time, Try}
-import java.net.{InetSocketAddress, SocketAddress}
+import com.twitter.finagle.pushsession.PushChannelHandle
+import com.twitter.finagle.pushsession.PushSession
+import com.twitter.finagle.ssl.session.NullSslSessionInfo
+import com.twitter.finagle.ssl.session.SslSessionInfo
+import com.twitter.util.Future
+import com.twitter.util.Promise
+import com.twitter.util.Return
+import com.twitter.util.Time
+import com.twitter.util.Try
+import java.net.InetSocketAddress
+import java.net.SocketAddress
 import scala.collection.mutable
 
 class MockChannelHandle[In, Out](var currentSession: PushSession[In, Out])
@@ -80,5 +87,9 @@ class MockChannelHandle[In, Out](var currentSession: PushSession[In, Out])
   def close(deadline: Time): Future[Unit] = {
     closedCalled = true
     onClose
+  }
+
+  override def sendInsideEventLoop(message: Out)(onComplete: Try[Unit] => Unit): Unit = {
+    pendingWrites += SendOne(message, onComplete)
   }
 }
