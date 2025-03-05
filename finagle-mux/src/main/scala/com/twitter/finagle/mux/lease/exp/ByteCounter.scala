@@ -74,8 +74,8 @@ private[lease] class WindowedByteCounter private[lease] (val info: JvmInfo, ctx:
   @volatile private[lease] var passCount: Int = 0
 
   /** @return allocation rate in bytes per millisecond. */
-  def rate(): Double = sum().inBytes / W.inMilliseconds
-  private[this] def lastRate(): Double = allocs(idx).inBytes / P.inMilliseconds
+  def rate(): Double = sum().inBytes / W.inMilliseconds.toDouble
+  private[this] def lastRate(): Double = allocs(idx).inBytes / P.inMilliseconds.toDouble
 
   override def toString =
     "WindowedByteCounter(windowed=" +

@@ -124,7 +124,7 @@ private[threading] class EventLoopGroupTrackingRunnable(
     cpuTimeCounter.incr(TimeUnit.NANOSECONDS.toMillis(cpuTime))
     if (prevWallTimeNs != 0 && wallTimeNs != 0) {
       cpuUtilStat.add(
-        10000 * cpuTime / wallTimeNs
+        10000f * cpuTime / wallTimeNs
       )
     }
     prevCPUTimeNs = currCPUTimeNs

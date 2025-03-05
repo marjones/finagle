@@ -3,11 +3,15 @@ package com.twitter.finagle.mux.lease.exp
 import com.twitter.conversions.DurationOps._
 import com.twitter.util._
 import com.twitter.conversions.StorageUnitOps._
-import org.scalatest.concurrent.{Eventually, IntegrationPatience}
+import org.scalatest.concurrent.Eventually
+import org.scalatest.concurrent.IntegrationPatience
 import scala.util.Random
+import org.scalactic.Tolerance._
 import org.scalatest.funsuite.AnyFunSuite
 
 class WindowedByteCounterTest extends AnyFunSuite with Eventually with IntegrationPatience {
+
+  private[this] val epsilon = 1e-3
 
   trait ByteCounterHelper {
     val fakePool = new FakeMemoryPool(new FakeMemoryUsage(StorageUnit.zero, StorageUnit.zero))
@@ -93,9 +97,9 @@ class WindowedByteCounterTest extends AnyFunSuite with Eventually with Integrati
           nextPeriod()
         }
 
-        assert(
-          counter.rate() == (WindowedByteCounter.N.kilobytes).inBytes / WindowedByteCounter.W.inMilliseconds
-        )
+        val expectedRate =
+          WindowedByteCounter.N.kilobytes.inBytes / WindowedByteCounter.W.inMilliseconds.toDouble
+        assert(counter.rate() === expectedRate +- epsilon)
     }
   }
 
@@ -111,9 +115,9 @@ class WindowedByteCounterTest extends AnyFunSuite with Eventually with Integrati
           nextPeriod()
         }
 
-        assert(
-          counter.rate() == (WindowedByteCounter.N.kilobytes).inBytes / WindowedByteCounter.W.inMilliseconds
-        )
+        val expectedRate1 =
+          WindowedByteCounter.N.kilobytes.inBytes / WindowedByteCounter.W.inMilliseconds.toDouble
+        assert(counter.rate() === expectedRate1 +- epsilon)
 
         for (i <- 1 to WindowedByteCounter.N) {
           fakePool.setSnapshot(
@@ -122,10 +126,9 @@ class WindowedByteCounterTest extends AnyFunSuite with Eventually with Integrati
           nextPeriod()
         }
 
-        assert(
-          counter
-            .rate() == (2 * (WindowedByteCounter.N.kilobytes).inBytes / WindowedByteCounter.W.inMilliseconds)
-        )
+        val expectedRate2 =
+          2 * WindowedByteCounter.N.kilobytes.inBytes / WindowedByteCounter.W.inMilliseconds.toDouble
+        assert(counter.rate() === expectedRate2 +- epsilon)
     }
   }
 
@@ -145,7 +148,8 @@ class WindowedByteCounterTest extends AnyFunSuite with Eventually with Integrati
           nextPeriod()
         }
 
-        assert(counter.rate() == x.inBytes / WindowedByteCounter.W.inMilliseconds)
+        val expectedRate = x.inBytes / WindowedByteCounter.W.inMilliseconds.toDouble
+        assert(counter.rate() === expectedRate +- epsilon)
     }
   }
 
@@ -176,9 +180,9 @@ class WindowedByteCounterTest extends AnyFunSuite with Eventually with Integrati
           nextPeriod()
         }
 
-        assert(
-          counter.rate() == WindowedByteCounter.N.kilobytes.inBytes / WindowedByteCounter.W.inMilliseconds
-        )
+        val expectedRate =
+          WindowedByteCounter.N.kilobytes.inBytes / WindowedByteCounter.W.inMilliseconds.toDouble
+        assert(counter.rate() === expectedRate +- epsilon)
     }
   }
 

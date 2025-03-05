@@ -91,7 +91,7 @@ private[fiber_scheduler] final case class Optimizer(
         log.error(ex, "optimizer failure")
         stats.failure.incr()
     } finally {
-      stats.latency.add((System.nanoTime() - start) / 1000000)
+      stats.latency.add((System.nanoTime() - start) / 1000000f)
     }
   }
 
