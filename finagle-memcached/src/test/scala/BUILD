@@ -25,10 +25,7 @@ junit_tests(
     sources = ["**/*.scala"] + exclude_globs(EXTERNAL_SOURCES),
     compiler_option_sets = ["fatal_warnings"],
     platform = "java8",
-    tags = [
-        "bazel-compatible",
-        "known-to-fail-jira:CSL-12419",
-    ],
+    tags = ["bazel-compatible"],
     dependencies = [
         ":external",
         "3rdparty/jvm/com/fasterxml/jackson/core:jackson-databind",
