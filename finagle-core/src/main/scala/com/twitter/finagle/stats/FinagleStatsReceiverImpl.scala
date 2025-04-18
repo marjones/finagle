@@ -19,7 +19,7 @@ private final class FinagleStatsReceiverImpl(underlyingStatsReceiver: StatsRecei
       .translateIdentity(underlyingStatsReceiver) { identity =>
         identity.copy(
           hierarchicalName = "finagle" +: identity.hierarchicalName,
-          dimensionalName = "rpc" +: "finagle" +: identity.dimensionalName,
+          dimensionalName = "finagle" +: identity.dimensionalName,
           labels = identity.labels ++ newLabels,
           identityType = identity.identityType.bias(IdentityType.Full)
         )

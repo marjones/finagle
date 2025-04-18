@@ -45,6 +45,12 @@ object scopeSeparator
       "Override the scope separator."
     )
 
+object fullTranslation
+    extends GlobalFlag[Boolean](
+      false,
+      "Translate all scope() calls on StatsReceivers in both dimensional & hierarchical mode"
+    )
+
 object MetricsStatsReceiver {
   val defaultRegistry = new Metrics()
   private[stats] val defaultHostRegistry = Metrics.createDetached()
@@ -125,6 +131,12 @@ class MetricsStatsReceiver(val registry: Metrics)
   require(separator.length == 1, s"Scope separator should be one symbol: '$separator'")
 
   override def toString: String = "MetricsStatsReceiver"
+
+  override def scopeTranslation: NameTranslatingStatsReceiver.Mode = if (fullTranslation()) {
+    NameTranslatingStatsReceiver.FullTranslation
+  } else {
+    super.scopeTranslation
+  }
 
   /**
    * Create and register a counter inside the underlying Metrics library

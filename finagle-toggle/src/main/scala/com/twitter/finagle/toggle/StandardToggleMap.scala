@@ -123,7 +123,13 @@ object StandardToggleMap {
       ServiceLoadedToggleMap(libraryName),
       libsJson
     )
-    val observed = ToggleMap.observed(stacked, statsReceiver.scope("toggles", libraryName))
+    val observed = ToggleMap.observed(
+      stacked,
+      statsReceiver
+        .scope("toggles")
+        .hierarchicalScope(libraryName)
+        .label("library", libraryName)
+    )
     val toggleMap = new ToggleMap.Mutable with ToggleMap.Proxy {
       def underlying: ToggleMap = observed
       def put(id: String, fraction: Double): Unit = mutable.put(id, fraction)

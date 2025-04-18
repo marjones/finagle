@@ -24,6 +24,9 @@ Runtime Behavior Changes
 * finagle-core: `PipeliningClientPushSession` now collects stats `epoll_queue_delay_ns` and `message_send_latency_ns`.
   ``PHAB_ID=D1185421``
 * finagle-core: Halve Netty tasks in Netty4 pipeline client. ``PHAB_ID=D1193718``
+* finagle-core: Dimensional client & server metrics are prefixed with just `finagle_` instead of `rpc_finagle_client`
+  and `rpc_finagle_server`, respectively. ``PHAB_ID=D1218090``
+* finagle-core: Dimensional metrics from `DefaultStatsReceiver` are no longer prefixed with `app_`. ``PHAB_ID=D1218090``
 
 New Features
 ~~~~~~~~~~

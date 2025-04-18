@@ -17,7 +17,7 @@ class FinagleStatsReceiverTest extends AnyFunSuite {
   }
 
   test("Metrics get the right dimensional scopes and labels") {
-    assert(bizBazIdentity.dimensionalName == Seq("rpc", "finagle", "biz", "baz"))
+    assert(bizBazIdentity.dimensionalName == Seq("finagle", "biz", "baz"))
     assert(bizBazIdentity.labels == Map("implementation" -> "finagle", "rpc_system" -> "finagle"))
   }
 
@@ -41,7 +41,7 @@ class FinagleStatsReceiverTest extends AnyFunSuite {
     assert(identity.identityType == IdentityType.HierarchicalOnly)
 
     assert(identity.hierarchicalName == Seq("finagle", "biz", "baz"))
-    assert(identity.dimensionalName == Seq("rpc", "finagle", "biz", "baz"))
+    assert(identity.dimensionalName == Seq("finagle", "biz", "baz"))
     assert(identity.labels == Map("implementation" -> "finagle", "rpc_system" -> "finagle"))
   }
 }

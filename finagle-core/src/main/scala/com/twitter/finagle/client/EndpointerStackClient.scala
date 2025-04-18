@@ -178,5 +178,5 @@ trait EndpointerStackClient[Req, Rep, This <: EndpointerStackClient[Req, Rep, Th
 }
 
 private object EndpointerStackClient {
-  private val DimensionalClientScopes: Seq[String] = Seq("rpc", "finagle", "client")
+  private val DimensionalClientScopes: Seq[String] = Seq("finagle")
 }

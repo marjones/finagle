@@ -217,5 +217,5 @@ trait ListeningStackServer[Req, Rep, This <: ListeningStackServer[Req, Rep, This
 }
 
 private object ListeningStackServer {
-  private val DimensionalServerScopes: Seq[String] = Seq("rpc", "finagle", "server")
+  private val DimensionalServerScopes: Seq[String] = Seq("finagle")
 }

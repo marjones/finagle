@@ -56,7 +56,13 @@ private[finagle] class StandardStatsReceiver protected (
 
   final val self: StatsReceiver =
     BroadcastStatsReceiver(
-      Seq(rootStatsReceiver, rootStatsReceiver.scope(protocol).scope(serverScope)))
+      Seq(
+        rootStatsReceiver,
+        rootStatsReceiver
+          .hierarchicalScope(protocol).hierarchicalScope(serverScope)
+          .label("protocol", protocol).label("server", serverScope)
+      )
+    )
 
   final override def counter(metricBuilder: MetricBuilder): Counter =
     self.counter(withDescription(metricBuilder).withStandard.withUnlatchedCounter)
