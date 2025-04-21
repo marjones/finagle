@@ -1,9 +1,13 @@
 package com.twitter.finagle.factory
 
 import com.twitter.finagle._
+import com.twitter.finagle.stats.RollupStatsReceiver
+import com.twitter.finagle.stats.StatsReceiver
+import com.twitter.util.Future
+import com.twitter.util.Return
+import com.twitter.util.Stopwatch
+import com.twitter.util.Throw
 import com.twitter.util.Throwables
-import com.twitter.finagle.stats.{StatsReceiver, RollupStatsReceiver}
-import com.twitter.util.{Future, Stopwatch, Return, Throw}
 
 private[finagle] object StatsFactoryWrapper {
   val role = Stack.Role("ServiceCreationStats")
@@ -22,7 +26,10 @@ private[finagle] object StatsFactoryWrapper {
         else
           new StatsFactoryWrapper(
             next,
-            new RollupStatsReceiver(statsReceiver.scope("service_creation"))
+            new RollupStatsReceiver(
+              statsReceiver.scope("service_creation"),
+              hierarchicalOnly = true
+            )
           )
       }
     }
@@ -41,7 +48,10 @@ class StatsFactoryWrapper[Req, Rep](self: ServiceFactory[Req, Rep], statsReceive
     val elapsed = Stopwatch.start()
     super.apply(conn) respond {
       case Throw(t) =>
-        failureStats.counter(Throwables.mkString(t): _*).incr()
+        failureStats
+          .label("exception", Throwables.RootCause.nested(t).getClass.getName)
+          .counter(Throwables.mkString(t): _*)
+          .incr()
         latencyStat.add(elapsed().inMilliseconds)
       case Return(_) =>
         latencyStat.add(elapsed().inMilliseconds)

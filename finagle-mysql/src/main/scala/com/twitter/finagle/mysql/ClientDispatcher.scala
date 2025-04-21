@@ -1,16 +1,25 @@
 package com.twitter.finagle.mysql
 
-import com.github.benmanes.caffeine.cache.{Caffeine, RemovalCause, RemovalListener}
+import com.github.benmanes.caffeine.cache.Caffeine
+import com.github.benmanes.caffeine.cache.RemovalCause
+import com.github.benmanes.caffeine.cache.RemovalListener
 import com.twitter.cache.caffeine.CaffeineCache
 import com.twitter.finagle.dispatch.GenSerialClientDispatcher
 import com.twitter.finagle.dispatch.ClientDispatcher.wrapWriteException
 import com.twitter.finagle.mysql.LostSyncException.const
-import com.twitter.finagle.mysql.param.{MaxConcurrentPrepareStatements, UnsignedColumns}
-import com.twitter.finagle.mysql.transport.{MysqlBuf, MysqlBufReader, Packet}
+import com.twitter.finagle.mysql.param.MaxConcurrentPrepareStatements
+import com.twitter.finagle.mysql.param.UnsignedColumns
+import com.twitter.finagle.mysql.transport.MysqlBuf
+import com.twitter.finagle.mysql.transport.MysqlBufReader
+import com.twitter.finagle.mysql.transport.Packet
 import com.twitter.finagle.param.Stats
-import com.twitter.finagle.stats.{Counter, LazyStatsReceiver, StatsReceiver}
+import com.twitter.finagle.stats.Counter
+import com.twitter.finagle.stats.LazyStatsReceiver
+import com.twitter.finagle.stats.StatsReceiver
 import com.twitter.finagle.transport.Transport
-import com.twitter.finagle.{Service, ServiceProxy, Stack}
+import com.twitter.finagle.Service
+import com.twitter.finagle.ServiceProxy
+import com.twitter.finagle.Stack
 import com.twitter.util._
 
 /**
@@ -38,8 +47,10 @@ private[mysql] class PrepareCache(
   private[this] val evictionCounters = {
     val counters = new Array[Counter](RemovalCause.values().length)
     for (value <- RemovalCause.values()) {
-      counters(value.ordinal()) =
-        scopedStatsReceiver.counter(s"evicted_${value.name().toLowerCase}")
+      counters(value.ordinal()) = scopedStatsReceiver
+        .hierarchicalScope(s"evicted_${value.name().toLowerCase}")
+        .dimensionalScope("evicted").label("cause", value.name().toLowerCase())
+        .counter()
     }
     counters
   }

@@ -3,11 +3,19 @@ package com.twitter.finagle.thrift.service
 import com.twitter.finagle.context.Contexts
 import com.twitter.finagle.service.ResponseClassifier
 import com.twitter.finagle.stats.StatsReceiver
-import com.twitter.finagle.thrift.{Headers, RichClientParam, ThriftClientRequest, ThriftMethodStats}
-import com.twitter.finagle.{Filter, Service, SimpleFilter}
+import com.twitter.finagle.thrift.Headers
+import com.twitter.finagle.thrift.RichClientParam
+import com.twitter.finagle.thrift.ThriftClientRequest
+import com.twitter.finagle.thrift.ThriftMethodStats
+import com.twitter.finagle.Filter
+import com.twitter.finagle.Service
+import com.twitter.finagle.SimpleFilter
 import com.twitter.scrooge
 import com.twitter.scrooge.ThriftMethod
-import com.twitter.util.{Future, Return, Throw, Try}
+import com.twitter.util.Future
+import com.twitter.util.Return
+import com.twitter.util.Throw
+import com.twitter.util.Try
 
 /**
  * Construct `Service[scrooge.Request[method.Args],scrooge.Response[method.SuccessType]]` interface for a [[ThriftMethod]].
@@ -99,7 +107,11 @@ object ThriftReqRepServicePerEndpoint {
     stats: StatsReceiver,
     responseClassifier: ResponseClassifier
   ): SimpleFilter[scrooge.Request[method.Args], scrooge.Response[method.SuccessType]] = {
-    val methodStats = ThriftMethodStats(stats.scope(method.serviceName).scope(method.name))
+    val methodStats = ThriftMethodStats(
+      stats
+        .hierarchicalScope(method.serviceName).hierarchicalScope(method.name)
+        .label("service", method.serviceName).label("method", method.name)
+    )
     val methodStatsResponseHandler = ThriftMethodStatsHandler(method) _
     new SimpleFilter[scrooge.Request[method.Args], scrooge.Response[method.SuccessType]] {
       def apply(

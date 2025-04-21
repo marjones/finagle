@@ -1,8 +1,12 @@
 package com.twitter.finagle.http.filter
 
 import com.twitter.finagle._
-import com.twitter.finagle.http.{Request, Response, Status}
-import com.twitter.finagle.stats.{Counter, Stat, StatsReceiver}
+import com.twitter.finagle.http.Request
+import com.twitter.finagle.http.Response
+import com.twitter.finagle.http.Status
+import com.twitter.finagle.stats.Counter
+import com.twitter.finagle.stats.Stat
+import com.twitter.finagle.stats.StatsReceiver
 import com.twitter.util._
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReferenceArray
@@ -77,12 +81,17 @@ class StatsFilter[REQUEST <: Request] private[filter] (stats: StatsReceiver, now
   private[this] val statusRange: AtomicReferenceArray[StatusStats] =
     new AtomicReferenceArray[StatusStats](6)
 
+  private[this] def mkStatusStats(code: String): StatusStats = StatusStats(
+    statusReceiver.hierarchicalScope(code).label("code", code).counter(),
+    timeReceiver.hierarchicalScope(code).label("code", code).stat(),
+  )
+
   private[this] def getStatusRange(code: Int): StatusStats = {
     val index = getStatusRangeIndex(code)
     val statsPair = statusRange.get(index)
     if (statsPair == null) {
       val codeRange = statusCodeRange(code)
-      val initPair = StatusStats(statusReceiver.counter(codeRange), timeReceiver.stat(codeRange))
+      val initPair = mkStatusStats(codeRange)
       statusRange.compareAndSet(index, null, initPair)
       initPair
     } else {
@@ -94,7 +103,7 @@ class StatsFilter[REQUEST <: Request] private[filter] (stats: StatsReceiver, now
   private[this] val statusCacheFn = new java.util.function.Function[Int, StatusStats] {
     def apply(t: Int): StatusStats = {
       val statusCode = t.toString
-      StatusStats(statusReceiver.counter(statusCode), timeReceiver.stat(statusCode))
+      mkStatusStats(statusCode)
     }
   }
 
