@@ -261,4 +261,24 @@ class PrometheusExporterTest extends AnyFunSuite {
           |foo_ping_ms_sum{biz="bar"} 6
           |""".stripMargin)
   }
+
+  test("translate illegal Prometheus characters to underscores") {
+    val counter = CounterSnapshot(
+      hierarchicalName = "metric",
+      builder = MetricBuilder(
+        name = Seq("invalid-metric.seconds"),
+        metricType = CounterType,
+        units = Seconds
+      ).withLabels(Map("invalid.label" -> "foo")).withDimensionalSupport,
+      value = 500L
+    )
+    val result = writeMetrics(Seq(counter), Seq.empty, Seq.empty, exportMetadata = true)
+
+    assert(
+      result ==
+        """# TYPE invalid_metric_seconds counter
+          |# UNIT invalid_metric_seconds Seconds
+          |invalid_metric_seconds{invalid_label="foo"} 500
+          |""".stripMargin)
+  }
 }

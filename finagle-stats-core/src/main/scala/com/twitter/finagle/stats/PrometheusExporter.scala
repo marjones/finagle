@@ -17,6 +17,7 @@ private final class PrometheusExporter(
   exportMetadata: Boolean,
   exportEmptyQuantiles: Boolean,
   verbosityPattern: Option[String => Boolean]) {
+  private[this] final val NamePattern = """[^a-zA-Z0-9_]""".r
 
   /**
    * Write the value of the metric as a `Double`.
@@ -162,7 +163,7 @@ private final class PrometheusExporter(
           } else {
             writer.append(',')
           }
-          writer.append(name)
+          writer.append(NamePattern.replaceAllIn(name, MetricBuilder.DimensionalNameScopeSeparator))
           writer.append('=')
           writer.append('"')
           writer.append(value)
@@ -249,7 +250,9 @@ private final class PrometheusExporter(
   }
 
   private[this] def writeName(writer: StringBuilder, name: Seq[String]): Unit =
-    name.addString(writer, MetricBuilder.DimensionalNameScopeSeparator)
+    name.view
+      .map { part => NamePattern.replaceAllIn(part, MetricBuilder.DimensionalNameScopeSeparator) }
+      .addString(writer, MetricBuilder.DimensionalNameScopeSeparator)
 
   /**
    * Write user-defined labels and reserved labels for Prometheus summary and histogram.
