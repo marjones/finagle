@@ -25,6 +25,13 @@ object Requeues extends Contexts.broadcast.Key[Requeues]("com.twitter.finagle.Re
   def current: Option[Requeues] =
     Contexts.broadcast.get(Requeues)
 
+  def isRequeue: Boolean = {
+    current match {
+      case Some(requeues) if requeues.attempt > 0 => true
+      case _ => false
+    }
+  }
+
   override def marshal(requeues: Requeues): Buf = {
     val bw = BufByteWriter.fixed(4)
     bw.writeIntBE(requeues.attempt)

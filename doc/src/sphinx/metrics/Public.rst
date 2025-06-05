@@ -82,6 +82,21 @@ ServerStatsFilter
   from client to server. Be aware that clock drift between hosts, stop the world
   pauses, and queue backups can contribute here. Not supported by all protocols.
 
+**request_classification/total**
+  Counter of the total number of requests, including those with responses flagged Ignorable.
+  This can be used as a denominator when calculating the fraction of requests that are retries,
+  requeues, or backups (see counters below).
+
+**request_classification/retry**
+  Counter of the number of requests received that are retries.
+
+**request_classification/requeue**
+  Counter of the number of requests received that are requeues (e.g., retried NACKs).
+
+**request_classification/backup**
+  Counter of the number of requests that are backups.
+
+
 RequestSemaphoreFilter
 <<<<<<<<<<<<<<<<<<<<<<
 

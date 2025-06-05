@@ -2,8 +2,19 @@ package com.twitter.finagle.filter
 
 import com.twitter.finagle.context.Deadline
 import com.twitter.finagle.stats.StatsReceiver
-import com.twitter.finagle.{param, Service, ServiceFactory, SimpleFilter, Stack, Stackable}
-import com.twitter.util.{Time, Duration, Future, Stopwatch}
+import com.twitter.finagle.param
+import com.twitter.finagle.Service
+import com.twitter.finagle.ServiceFactory
+import com.twitter.finagle.SimpleFilter
+import com.twitter.finagle.Stack
+import com.twitter.finagle.Stackable
+import com.twitter.finagle.context.BackupRequest
+import com.twitter.finagle.context.Requeues
+import com.twitter.finagle.context.RetryContext
+import com.twitter.util.Time
+import com.twitter.util.Duration
+import com.twitter.util.Future
+import com.twitter.util.Stopwatch
 import java.util.concurrent.TimeUnit
 
 private[finagle] object ServerStatsFilter {
@@ -27,7 +38,8 @@ private[finagle] object ServerStatsFilter {
 
 /**
  * A [[com.twitter.finagle.Filter]] that records the elapsed execution
- * times of the underlying [[com.twitter.finagle.Service]].
+ * times of the underlying [[com.twitter.finagle.Service]], in addition to classifying requests
+ * as a retry, requeue, or backup.
  *
  * @note the stat does not include the time that it takes to satisfy
  *       the returned `Future`, only how long it takes for the `Service`
@@ -42,7 +54,32 @@ private[finagle] class ServerStatsFilter[Req, Rep](
   private[this] val handletime = statsReceiver.stat("handletime_us")
   private[this] val transitTimeStat = statsReceiver.stat("transit_latency_ms")
 
+  // We use a new scope here for clarity. We record "total" for two reasons:
+  // 1. This filter is separate from the StatsFilter, which records /requests after requests have
+  //    completed --  meaning /total and /requests can be different.
+  // 2. /requests *excludes* requests that have been superceded by a backup or have their response
+  //    flagged with FailureFlags.Ignorable (for accounting with success/failures). Here, we want to
+  //    have an exact measure of requests so we can see the true proportion of retries/requeues/backups.
+  private[this] val requestClassificationScope = statsReceiver.scope("request_classification")
+  private[this] val backupCounter = requestClassificationScope.counter("backup")
+  private[this] val requeueCounter = requestClassificationScope.counter("requeue")
+  private[this] val retryCounter = requestClassificationScope.counter("retry")
+  private[this] val totalCounter = requestClassificationScope.counter("total")
+
   def apply(request: Req, service: Service[Req, Rep]): Future[Rep] = {
+    totalCounter.incr()
+    if (BackupRequest.wasInitiated) {
+      backupCounter.incr()
+    }
+
+    if (Requeues.isRequeue) {
+      requeueCounter.incr()
+    }
+
+    if (RetryContext.isRetry) {
+      retryCounter.incr()
+    }
+
     val startAt = nowNanos()
 
     Deadline.current match {

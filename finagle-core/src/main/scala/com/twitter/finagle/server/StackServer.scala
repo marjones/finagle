@@ -12,7 +12,6 @@ import com.twitter.finagle.service.TimeoutFilter
 import com.twitter.finagle.stats.ServerStatsReceiver
 import com.twitter.finagle.tracing._
 import com.twitter.finagle.Stack
-import com.twitter.finagle._
 import com.twitter.jvm.Jvm
 
 object StackServer {
