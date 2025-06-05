@@ -5,6 +5,7 @@ import com.twitter.finagle.context.BackupRequest
 import com.twitter.finagle.context.Contexts
 import com.twitter.finagle.context.Deadline
 import com.twitter.finagle.context.Requeues
+import com.twitter.finagle.context.RetryContext
 import com.twitter.finagle.http.Message
 import com.twitter.finagle.http.Method
 import com.twitter.finagle.http.Request
@@ -152,6 +153,23 @@ class HttpContextTest extends AnyFunSuite {
 
         HttpContext.read(m) {
           assert(BackupRequest.wasInitiated)
+        }
+      }
+    }
+  }
+
+  test("Retry written matches read") {
+    val m = newMsg()
+    assert(!RetryContext.isRetry)
+    RetryContext.withRetry {
+      HttpContext.write(m)
+      assert(RetryContext.isRetry)
+
+      Contexts.broadcast.letClearAll {
+        assert(!RetryContext.isRetry)
+
+        HttpContext.read(m) {
+          assert(RetryContext.isRetry)
         }
       }
     }

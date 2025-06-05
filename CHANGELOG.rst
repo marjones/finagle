@@ -36,6 +36,7 @@ New Features
   context per request.
 * finagle-netty4: Added support for custom event loop implementations. ``PHAB_ID=D1185136``
 * finagle-core: Add low priority offload executor. ``PHAB_ID=D1189064``
+* finagle-core: A new context, `c.t.f.Retry` is set for a request if it is a retry. ``PHAB_ID=D1228127``
 
 
 Bug Fixes

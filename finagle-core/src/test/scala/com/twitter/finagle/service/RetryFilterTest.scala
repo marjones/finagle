@@ -8,6 +8,7 @@ import com.twitter.finagle.Failure
 import com.twitter.finagle.FailureFlags
 import com.twitter.finagle.Service
 import com.twitter.finagle.WriteException
+import com.twitter.finagle.context.RetryContext
 import com.twitter.util._
 import org.mockito.ArgumentMatchers.anyObject
 import org.mockito.Mockito.times
@@ -91,6 +92,40 @@ class RetryFilterTest extends AnyFunSpec with MockitoSugar with BeforeAndAfter {
   }
 
   describe("RetryFilter") {
+
+    it("sets retry context correctly in RetryFilter") {
+      val timer = new MockTimer
+
+      val stats = new InMemoryStatsReceiver()
+      val service = mock[Service[Int, Int]]
+      when(service.close(anyObject[Time])) thenReturn Future.Done
+      when(service(123))
+        .thenAnswer { _ =>
+          if (RetryContext.isRetry) Future(321)
+          else Future.exception(WriteException(new Exception("first attempt")))
+        }
+
+      val policy = RetryPolicy.tries[Try[Nothing]](
+        2,
+        {
+          case Throw(WriteException(_)) => true
+        })
+      val filter = new RetryExceptionsFilter[Int, Int](policy, timer, stats)
+      val retryingService = filter andThen service
+
+      Time.withCurrentTimeFrozen { tc =>
+        val result = retryingService(123)
+        verify(service, times(1))(123)
+        assert(!result.isDefined)
+
+        tc.advance(1.second)
+        timer.tick()
+
+        verify(service, times(2))(123)
+        assert(Await.result(result, 5.seconds) == 321)
+        assert(stats.stat("retries")() == Seq(1))
+      }
+    }
 
     it("respects RetryBudget") {
       val stats = new InMemoryStatsReceiver()

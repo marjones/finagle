@@ -52,7 +52,8 @@ object HttpContext {
     Array[HttpContext](
       HttpDeadline,
       HttpRequeues,
-      HttpBackupRequest
+      HttpBackupRequest,
+      HttpRetry
     )
   }
 

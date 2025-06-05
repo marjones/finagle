@@ -2,10 +2,17 @@ package com.twitter.finagle.service
 
 import com.twitter.conversions.DurationOps._
 import com.twitter.finagle.Filter.TypeAgnostic
+import com.twitter.finagle.context
 import com.twitter.finagle.param.HighResTimer
-import com.twitter.finagle.stats.{NullStatsReceiver, StatsReceiver}
-import com.twitter.finagle.tracing.{Annotation, Trace, TraceId}
-import com.twitter.finagle.{Backoff, FailureFlags, Filter, Service}
+import com.twitter.finagle.stats.NullStatsReceiver
+import com.twitter.finagle.stats.StatsReceiver
+import com.twitter.finagle.tracing.Annotation
+import com.twitter.finagle.tracing.Trace
+import com.twitter.finagle.tracing.TraceId
+import com.twitter.finagle.Backoff
+import com.twitter.finagle.FailureFlags
+import com.twitter.finagle.Filter
+import com.twitter.finagle.Service
 import com.twitter.util._
 
 object RetryingService {
@@ -101,7 +108,14 @@ class RetryFilter[Req, Rep](
       trace.recordRpc("retry")
     }
 
-    val svcRep = service(req)
+    val svcRep = if (isRetriedRequest) {
+      context.RetryContext.withRetry {
+        service(req)
+      }
+    } else {
+      service(req)
+    }
+
     if (trace.isActivelyTracing) {
       // we always trace the exception
       svcRep.respond {
