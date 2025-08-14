@@ -2,7 +2,10 @@ package com.twitter.finagle.loadbalancer.aperture
 
 import com.twitter.concurrent.AsyncSemaphore
 import com.twitter.finagle.stats.FinagleStatsReceiver
-import com.twitter.util.{Future, Time}
+import com.twitter.finagle.util.DefaultTimer
+import com.twitter.util.Duration
+import com.twitter.util.Future
+import com.twitter.util.Time
 
 private[aperture] object ApertureEagerConnections {
   // exposed for testing
@@ -24,6 +27,9 @@ private[aperture] object ApertureEagerConnections {
       latencyStat.add(dur)
 
       task
+      // A conservative timeout to prevent a misconfigured service
+      // from blocking all other services
+        .raiseWithin(Duration.fromSeconds(60))(DefaultTimer)
     }
   }
 }
